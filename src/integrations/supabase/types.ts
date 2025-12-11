@@ -125,6 +125,7 @@ export type Database = {
           extension_active: boolean | null
           extension_version: string | null
           id: string
+          last_heartbeat: string | null
           last_seen_at: string
           ms_id: string | null
         }
@@ -137,6 +138,7 @@ export type Database = {
           extension_active?: boolean | null
           extension_version?: string | null
           id: string
+          last_heartbeat?: string | null
           last_seen_at?: string
           ms_id?: string | null
         }
@@ -149,6 +151,7 @@ export type Database = {
           extension_active?: boolean | null
           extension_version?: string | null
           id?: string
+          last_heartbeat?: string | null
           last_seen_at?: string
           ms_id?: string | null
         }
@@ -192,6 +195,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_inactive_extensions: { Args: never; Returns: undefined }
       update_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
