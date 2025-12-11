@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
-const EXTENSION_VERSION = '5.1.0';
+const EXTENSION_VERSION = '5.2.0';
 const DOWNLOAD_URL = 'https://livbbxegwifbhtboyczy.supabase.co/functions/v1/extension-download';
 
 export default function Extensions() {
