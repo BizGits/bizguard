@@ -27,9 +27,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { label: 'Events', href: '/dashboard/events', icon: <Activity className="w-5 h-5" /> },
-  { label: 'Reports', href: '/dashboard/reports', icon: <FileBarChart className="w-5 h-5" /> },
+  { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" /> },
   { label: 'Brands', href: '/dashboard/brands', icon: <Tags className="w-5 h-5" /> },
-  { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
+  { label: 'Reports', href: '/dashboard/reports', icon: <FileBarChart className="w-5 h-5" /> },
   { label: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
