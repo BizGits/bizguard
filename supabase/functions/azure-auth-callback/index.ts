@@ -27,12 +27,13 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { code, redirectUri } = body;
+    const { code, redirectUri, codeVerifier } = body;
     
     console.log('Callback received:', { 
       hasCode: !!code, 
       redirectUri,
-      codeLength: code?.length 
+      codeLength: code?.length,
+      hasPkce: !!codeVerifier
     });
 
     if (!code) {
@@ -45,6 +46,24 @@ serve(async (req) => {
 
     console.log('Exchanging code for tokens...');
 
+    // Build token request params
+    const tokenParams: Record<string, string> = {
+      client_id: clientId,
+      code: code,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+      scope: 'openid profile email User.Read',
+    };
+    
+    // Use PKCE code_verifier if provided (for extensions/SPAs), otherwise use client_secret
+    if (codeVerifier) {
+      tokenParams.code_verifier = codeVerifier;
+      console.log('Using PKCE code_verifier for token exchange');
+    } else {
+      tokenParams.client_secret = clientSecret;
+      console.log('Using client_secret for token exchange');
+    }
+
     // Exchange code for tokens
     const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
     const tokenResponse = await fetch(tokenUrl, {
@@ -52,14 +71,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code: code,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-        scope: 'openid profile email User.Read',
-      }),
+      body: new URLSearchParams(tokenParams),
     });
 
     if (!tokenResponse.ok) {
