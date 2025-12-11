@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Brands from "./pages/Brands";
 import Users from "./pages/Users";
+import Events from "./pages/Events";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -44,6 +46,8 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
             <Route path="/dashboard/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/dashboard/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+            <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

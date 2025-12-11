@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Users, Shield, AlertTriangle, Activity } from 'lucide-react';
+import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, subDays } from 'date-fns';
+import { BlockingChart } from '@/components/dashboard/BlockingChart';
+import { ActionPieChart } from '@/components/dashboard/ActionPieChart';
 
 interface StatsCard {
   title: string;
@@ -28,12 +32,24 @@ export default function Dashboard() {
   const { isAdmin } = useAuth();
   const [stats, setStats] = useState<StatsCard[]>([]);
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
+  const [chartEvents, setChartEvents] = useState<{ id: string; action: string; created_at: string }[]>([]);
   const [activeUsers, setActiveUsers] = useState<{ id: string; display_name: string; last_seen_at: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        // Fetch events for last 7 days for charts
+        const sevenDaysAgo = subDays(new Date(), 7);
+        
+        const { data: chartData } = await supabase
+          .from('events')
+          .select('id, action, created_at')
+          .gte('created_at', sevenDaysAgo.toISOString())
+          .order('created_at', { ascending: false });
+
+        setChartEvents(chartData || []);
+
         // Fetch events count for last 24h
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
@@ -80,11 +96,27 @@ export default function Dashboard() {
 
         setRecentEvents(eventsData || []);
 
+        // Calculate week over week change
+        const twoWeeksAgo = subDays(new Date(), 14);
+        const { count: lastWeekBlocked } = await supabase
+          .from('events')
+          .select('*', { count: 'exact', head: true })
+          .eq('action', 'BLOCKED')
+          .gte('created_at', twoWeeksAgo.toISOString())
+          .lt('created_at', sevenDaysAgo.toISOString());
+
+        const thisWeekBlocked = chartData?.filter(e => e.action === 'BLOCKED').length || 0;
+        const weekChange = lastWeekBlocked 
+          ? Math.round(((thisWeekBlocked - lastWeekBlocked) / lastWeekBlocked) * 100)
+          : 0;
+
         setStats([
           {
             title: 'Blocked Terms (24h)',
             value: blockedCount || 0,
-            icon: <AlertTriangle className="w-5 h-5 text-warning" />,
+            icon: <AlertTriangle className="w-5 h-5 text-destructive" />,
+            change: `${weekChange >= 0 ? '+' : ''}${weekChange}% vs last week`,
+            changeType: weekChange > 0 ? 'negative' : weekChange < 0 ? 'positive' : 'neutral',
           },
           {
             title: 'Active Agents',
@@ -97,9 +129,9 @@ export default function Dashboard() {
             icon: <Shield className="w-5 h-5 text-primary" />,
           },
           {
-            title: 'Total Events',
-            value: eventsData?.length || 0,
-            icon: <Users className="w-5 h-5 text-info" />,
+            title: 'Weekly Events',
+            value: chartData?.length || 0,
+            icon: <TrendingUp className="w-5 h-5 text-info" />,
           },
         ]);
       } catch (error) {
@@ -114,10 +146,11 @@ export default function Dashboard() {
 
   const getActionColor = (action: string) => {
     switch (action) {
-      case 'BLOCKED': return 'text-destructive';
-      case 'TOGGLED_OFF': return 'text-warning';
-      case 'TOGGLED_ON': return 'text-success';
-      default: return 'text-muted-foreground';
+      case 'BLOCKED': return 'text-destructive bg-destructive/20';
+      case 'TOGGLED_OFF': return 'text-warning bg-warning/20';
+      case 'TOGGLED_ON': return 'text-success bg-success/20';
+      case 'LOGIN': return 'text-info bg-info/20';
+      default: return 'text-muted-foreground bg-muted';
     }
   };
 
@@ -146,6 +179,15 @@ export default function Dashboard() {
                     <p className="text-3xl font-semibold text-foreground mt-2">
                       {isLoading ? '—' : stat.value}
                     </p>
+                    {stat.change && (
+                      <p className={`text-xs mt-1 ${
+                        stat.changeType === 'positive' ? 'text-success' :
+                        stat.changeType === 'negative' ? 'text-destructive' :
+                        'text-muted-foreground'
+                      }`}>
+                        {stat.change}
+                      </p>
+                    )}
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-accent/50 flex items-center justify-center">
                     {stat.icon}
@@ -156,10 +198,48 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Blocking trends chart */}
+          <Card variant="glass" className="lg:col-span-2 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                Activity Trends (7 days)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="h-[280px] flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <BlockingChart events={chartEvents} days={7} />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Action distribution pie chart */}
+          <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '250ms' }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Action Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="h-[200px] flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <ActionPieChart events={chartEvents} />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Active agents */}
           {isAdmin && (
-            <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '300ms' }}>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
@@ -195,9 +275,15 @@ export default function Dashboard() {
           )}
 
           {/* Recent events */}
-          <Card variant="glass" className={`animate-slide-up ${isAdmin ? 'lg:col-span-2' : 'lg:col-span-3'}`} style={{ animationDelay: '250ms' }}>
-            <CardHeader>
+          <Card variant="glass" className={`animate-slide-up ${isAdmin ? 'lg:col-span-2' : 'lg:col-span-3'}`} style={{ animationDelay: '350ms' }}>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Recent Events</CardTitle>
+              <Button variant="ghost" size="sm" asChild className="gap-1">
+                <Link to="/dashboard/events">
+                  View all
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent>
               {recentEvents.length === 0 ? (
@@ -210,7 +296,7 @@ export default function Dashboard() {
                       className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full bg-accent ${getActionColor(event.action)}`}>
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${getActionColor(event.action)}`}>
                           {event.action}
                         </span>
                         <div>
