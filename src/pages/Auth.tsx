@@ -134,7 +134,7 @@ export default function Auth() {
       <Card variant="glass" className="w-full max-w-md animate-scale-in relative z-10">
         <CardHeader className="text-center pb-2">
           <img src={logo} alt="BWBlock" className="mx-auto w-20 h-20 object-contain mb-4" />
-          <CardTitle className="text-2xl">Welcome to BWBlock</CardTitle>
+          <CardTitle className="text-2xl">Welcome to BizGuard!</CardTitle>
           <CardDescription className="text-muted-foreground">
             Brand protection for your team
           </CardDescription>
