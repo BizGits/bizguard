@@ -173,12 +173,15 @@ serve(async (req) => {
 
       userId = newUser.user.id;
       console.log('New user created:', userId);
+    }
 
-      // Mark invitation as used
+    // Mark invitation as used (if not already used)
+    if (!invitation.used_at) {
       await supabase
         .from('invitations')
         .update({ used_at: new Date().toISOString() })
         .eq('email', email.toLowerCase());
+      console.log('Invitation marked as used for:', email);
     }
 
     // Generate a magic link / session for the user
