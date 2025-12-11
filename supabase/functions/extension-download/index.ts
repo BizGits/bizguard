@@ -9,6 +9,167 @@ const corsHeaders = {
 const SUPABASE_URL = 'https://livbbxegwifbhtboyczy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpdmJieGVnd2lmYmh0Ym95Y3p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDQyMTMsImV4cCI6MjA4MTAyMDIxM30.hBcAWcwAdK4Rx-lrVWRTYKqi2ttjgVbAZRCP4jHUN2Y';
 
+// Simple PNG generator for solid color icons with a design
+function createSimplePng(size: number): Uint8Array {
+  // Create a simple PNG with purple background and white circle pattern
+  const width = size;
+  const height = size;
+  
+  // PNG signature
+  const signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  
+  // IHDR chunk
+  const ihdr = createIHDRChunk(width, height);
+  
+  // Create image data (RGBA)
+  const imageData = new Uint8Array(height * (1 + width * 4)); // +1 for filter byte per row
+  
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const outerRadius = width * 0.4;
+  const innerRadius = width * 0.15;
+  
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * (1 + width * 4);
+    imageData[rowStart] = 0; // No filter
+    
+    for (let x = 0; x < width; x++) {
+      const px = rowStart + 1 + x * 4;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      // Purple background (#7c3aed)
+      let r = 124, g = 58, b = 237, a = 255;
+      
+      // White flower petals
+      if (dist < outerRadius && dist > innerRadius) {
+        const angle = Math.atan2(dy, dx);
+        const petalAngle = ((angle + Math.PI) / (Math.PI * 2)) * 8;
+        const petalPhase = Math.abs(Math.sin(petalAngle * Math.PI));
+        if (petalPhase > 0.5) {
+          r = 255; g = 255; b = 255;
+        }
+      }
+      
+      // White center circle
+      if (dist < innerRadius * 0.6) {
+        r = 255; g = 255; b = 255;
+      }
+      
+      // Transparent corners (rounded)
+      const cornerDist = Math.max(Math.abs(dx), Math.abs(dy));
+      if (cornerDist > width * 0.45) {
+        a = 0;
+      }
+      
+      imageData[px] = r;
+      imageData[px + 1] = g;
+      imageData[px + 2] = b;
+      imageData[px + 3] = a;
+    }
+  }
+  
+  // Compress with simple zlib
+  const compressedData = deflateSimple(imageData);
+  const idat = createChunk('IDAT', compressedData);
+  
+  // IEND chunk
+  const iend = createChunk('IEND', new Uint8Array(0));
+  
+  // Combine all parts
+  const png = new Uint8Array(signature.length + ihdr.length + idat.length + iend.length);
+  let offset = 0;
+  png.set(signature, offset); offset += signature.length;
+  png.set(ihdr, offset); offset += ihdr.length;
+  png.set(idat, offset); offset += idat.length;
+  png.set(iend, offset);
+  
+  return png;
+}
+
+function createIHDRChunk(width: number, height: number): Uint8Array {
+  const data = new Uint8Array(13);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, width, false);
+  view.setUint32(4, height, false);
+  data[8] = 8; // bit depth
+  data[9] = 6; // color type (RGBA)
+  data[10] = 0; // compression
+  data[11] = 0; // filter
+  data[12] = 0; // interlace
+  return createChunk('IHDR', data);
+}
+
+function createChunk(type: string, data: Uint8Array): Uint8Array {
+  const chunk = new Uint8Array(4 + 4 + data.length + 4);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length, false);
+  chunk[4] = type.charCodeAt(0);
+  chunk[5] = type.charCodeAt(1);
+  chunk[6] = type.charCodeAt(2);
+  chunk[7] = type.charCodeAt(3);
+  chunk.set(data, 8);
+  const crc = crc32(chunk.subarray(4, 8 + data.length));
+  view.setUint32(8 + data.length, crc, false);
+  return chunk;
+}
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function deflateSimple(data: Uint8Array): Uint8Array {
+  // Simple uncompressed deflate (store blocks)
+  const blocks: number[] = [];
+  const maxBlockSize = 65535;
+  let offset = 0;
+  
+  while (offset < data.length) {
+    const remaining = data.length - offset;
+    const blockSize = Math.min(remaining, maxBlockSize);
+    const isLast = offset + blockSize >= data.length;
+    
+    blocks.push(isLast ? 0x01 : 0x00); // BFINAL + BTYPE=00 (stored)
+    blocks.push(blockSize & 0xFF);
+    blocks.push((blockSize >> 8) & 0xFF);
+    blocks.push((~blockSize) & 0xFF);
+    blocks.push((~blockSize >> 8) & 0xFF);
+    
+    for (let i = 0; i < blockSize; i++) {
+      blocks.push(data[offset + i]);
+    }
+    offset += blockSize;
+  }
+  
+  // Add zlib header and checksum
+  const adler = adler32(data);
+  const result = new Uint8Array(2 + blocks.length + 4);
+  result[0] = 0x78; // CMF
+  result[1] = 0x01; // FLG
+  result.set(blocks, 2);
+  const view = new DataView(result.buffer);
+  view.setUint32(2 + blocks.length, adler, false);
+  
+  return result;
+}
+
+function adler32(data: Uint8Array): number {
+  let a = 1, b = 0;
+  for (let i = 0; i < data.length; i++) {
+    a = (a + data[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return (b << 16) | a;
+}
+
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
@@ -42,17 +203,17 @@ const manifestJson = `{
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.svg",
-      "32": "icons/icon32.svg",
-      "48": "icons/icon48.svg",
-      "128": "icons/icon128.svg"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "icons": {
-    "16": "icons/icon16.svg",
-    "32": "icons/icon32.svg",
-    "48": "icons/icon48.svg",
-    "128": "icons/icon128.svg"
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   }
 }`;
 
@@ -437,7 +598,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.svg" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.2</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.2</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -515,41 +676,6 @@ const readmeMd = `# BizGuard Extension v5.2
 ## Login
 Sign in with your Microsoft account or use email/password.`;
 
-// SVG icon generator - BizGuard padlock with flower pattern
-const createSvgIcon = (size: number): string => {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">
-  <defs>
-    <linearGradient id="padlock" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8b5cf6"/>
-      <stop offset="50%" stop-color="#7c3aed"/>
-      <stop offset="100%" stop-color="#6d28d9"/>
-    </linearGradient>
-    <linearGradient id="shackle" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#a78bfa"/>
-      <stop offset="100%" stop-color="#8b5cf6"/>
-    </linearGradient>
-  </defs>
-  <!-- Shackle (top loop) -->
-  <path d="M44 48 L44 36 C44 22 52 14 64 14 C76 14 84 22 84 36 L84 48" 
-        fill="none" stroke="url(#shackle)" stroke-width="12" stroke-linecap="round"/>
-  <!-- Body (circle) -->
-  <circle cx="64" cy="76" r="38" fill="url(#padlock)"/>
-  <!-- Flower pattern (8 petals) -->
-  <g fill="white" opacity="0.95">
-    <ellipse cx="64" cy="60" rx="5" ry="12"/>
-    <ellipse cx="64" cy="92" rx="5" ry="12"/>
-    <ellipse cx="48" cy="76" rx="12" ry="5"/>
-    <ellipse cx="80" cy="76" rx="12" ry="5"/>
-    <ellipse cx="52.7" cy="64.7" rx="5" ry="12" transform="rotate(45 52.7 64.7)"/>
-    <ellipse cx="75.3" cy="87.3" rx="5" ry="12" transform="rotate(45 75.3 87.3)"/>
-    <ellipse cx="75.3" cy="64.7" rx="5" ry="12" transform="rotate(-45 75.3 64.7)"/>
-    <ellipse cx="52.7" cy="87.3" rx="5" ry="12" transform="rotate(-45 52.7 87.3)"/>
-  </g>
-  <!-- Center circle -->
-  <circle cx="64" cy="76" r="6" fill="white"/>
-</svg>`;
-};
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -570,10 +696,11 @@ serve(async (req) => {
     zip.addFile('popup.js', popupJs);
     zip.addFile('README.md', readmeMd);
     
-    // Add SVG icons
+    // Add PNG icons
     const iconSizes = [16, 32, 48, 128];
     for (const size of iconSizes) {
-      zip.addFile(`icons/icon${size}.svg`, createSvgIcon(size));
+      const pngData = createSimplePng(size);
+      zip.addFile(`icons/icon${size}.png`, pngData);
     }
     
     const zipBlob = await zip.generateAsync({ type: 'blob' });
