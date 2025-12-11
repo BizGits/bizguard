@@ -194,7 +194,7 @@ export default function Auth() {
     const downloadUrl = `${SUPABASE_URL}/functions/v1/extension-download`;
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = 'bizguard-extension-v5.3.zip';
+    link.download = 'bizguard-extension-v5.4.zip';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -323,7 +323,7 @@ export default function Auth() {
               onClick={handleDownload}
             >
               <Download className="w-5 h-5 mr-2" />
-              Download BizGuard Extension v5.3
+              Download BizGuard Extension v5.4
             </Button>
 
             {/* Installation Steps */}
