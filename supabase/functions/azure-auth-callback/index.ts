@@ -58,7 +58,7 @@ serve(async (req) => {
         code: code,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
-        scope: 'openid profile email',
+        scope: 'openid profile email User.Read',
       }),
     });
 
@@ -82,8 +82,9 @@ serve(async (req) => {
     });
 
     if (!userInfoResponse.ok) {
-      console.error('Failed to get user info');
-      return new Response(JSON.stringify({ error: 'Failed to get user info' }), {
+      const errorText = await userInfoResponse.text();
+      console.error('Failed to get user info:', userInfoResponse.status, errorText);
+      return new Response(JSON.stringify({ error: 'Failed to get user info', details: errorText }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

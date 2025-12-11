@@ -38,7 +38,7 @@ serve(async (req) => {
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('scope', 'openid profile email');
+    authUrl.searchParams.set('scope', 'openid profile email User.Read');
     authUrl.searchParams.set('response_mode', 'query');
     authUrl.searchParams.set('state', state);
 
