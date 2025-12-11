@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loader2, Code, Download, Chrome, Globe, CheckCircle2, Info } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Loader2, Code, Download, Chrome, Globe, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -14,29 +14,87 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, isLoading } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showDevMode, setShowDevMode] = useState(false);
   const [devCode, setDevCode] = useState('');
   const [isDevSigningIn, setIsDevSigningIn] = useState(false);
 
+  // Handle Azure AD callback
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    
+    if (code && !user) {
+      handleAzureCallback(code);
+    }
+  }, [searchParams, user]);
+
+  const handleAzureCallback = async (code: string) => {
+    setIsSigningIn(true);
+    try {
+      const redirectUri = `${window.location.origin}/auth`;
+      
+      const response = await supabase.functions.invoke('azure-auth-callback', {
+        body: { code, redirectUri },
+      });
+
+      if (response.error) {
+        toast({
+          title: 'Sign in failed',
+          description: response.error.message || 'Azure authentication failed',
+          variant: 'destructive',
+        });
+        // Clear the URL params
+        window.history.replaceState({}, '', '/auth');
+        return;
+      }
+
+      if (response.data?.magicLink) {
+        // Redirect to magic link to complete authentication
+        window.location.href = response.data.magicLink;
+      } else {
+        toast({
+          title: 'Sign in failed',
+          description: 'Could not complete authentication',
+          variant: 'destructive',
+        });
+        window.history.replaceState({}, '', '/auth');
+      }
+    } catch (error) {
+      toast({
+        title: 'Sign in failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, '', '/auth');
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const handleMicrosoftSignIn = async () => {
     setIsSigningIn(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'azure',
-        options: {
-          scopes: 'email profile openid',
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
+      const redirectUri = `${window.location.origin}/auth`;
+      
+      const response = await supabase.functions.invoke('azure-auth-init', {
+        body: { redirectUri },
       });
 
-      if (error) {
+      if (response.error) {
         toast({
           title: 'Sign in failed',
-          description: error.message,
+          description: response.error.message || 'Could not initiate Azure login',
           variant: 'destructive',
         });
+        return;
+      }
+
+      if (response.data?.authUrl) {
+        // Redirect to Azure AD
+        window.location.href = response.data.authUrl;
       }
     } catch (error) {
       toast({
