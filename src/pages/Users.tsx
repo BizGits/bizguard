@@ -372,8 +372,8 @@ export default function Users() {
                         </div>
                       </div>
 
-                      {/* Role actions */}
-                      {user.id !== profile?.id && (
+                      {/* Role actions - Admin only */}
+                      {isAdmin && user.id !== profile?.id && (
                         <div className="flex gap-2">
                           {user.role === 'MANAGEMENT' ? (
                             <Button 
