@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.check-inactive]
 verify_jwt = false
+
+[functions.brands]
+verify_jwt = false
