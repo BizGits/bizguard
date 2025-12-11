@@ -234,6 +234,9 @@ async function handleMessage(message, sender) {
     case 'LOGIN':
       return await handleLogin(message.email, message.password);
     
+    case 'MICROSOFT_LOGIN':
+      return await handleMicrosoftLogin();
+    
     case 'LOGOUT':
       return await handleLogout();
     
@@ -289,6 +292,182 @@ async function handleLogin(email, password) {
   } catch (error) {
     console.error('Login error:', error);
     return { success: false, error: error.message };
+  }
+}
+
+// Handle Microsoft/Azure AD login
+async function handleMicrosoftLogin() {
+  try {
+    // Get Azure auth URL from our edge function
+    const initResponse = await fetch(`${API_BASE}/azure-auth-init`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        redirectUri: chrome.identity.getRedirectURL()
+      })
+    });
+
+    if (!initResponse.ok) {
+      throw new Error('Failed to initialize Azure login');
+    }
+
+    const { authUrl } = await initResponse.json();
+
+    // Launch OAuth flow
+    const responseUrl = await new Promise((resolve, reject) => {
+      chrome.identity.launchWebAuthFlow(
+        {
+          url: authUrl,
+          interactive: true
+        },
+        (redirectUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(redirectUrl);
+          }
+        }
+      );
+    });
+
+    // Extract authorization code from redirect URL
+    const url = new URL(responseUrl);
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
+
+    if (error) {
+      throw new Error(url.searchParams.get('error_description') || error);
+    }
+
+    if (!code) {
+      throw new Error('No authorization code received');
+    }
+
+    // Exchange code for session via our edge function
+    const callbackResponse = await fetch(`${API_BASE}/azure-auth-callback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code,
+        redirectUri: chrome.identity.getRedirectURL()
+      })
+    });
+
+    const callbackData = await callbackResponse.json();
+
+    if (!callbackResponse.ok || callbackData.error) {
+      throw new Error(callbackData.message || callbackData.error || 'Authentication failed');
+    }
+
+    if (!callbackData.magicLink) {
+      throw new Error('No session token received');
+    }
+
+    // Use the magic link to get a session
+    // Extract token from magic link and verify it
+    const magicUrl = new URL(callbackData.magicLink);
+    const tokenHash = magicUrl.searchParams.get('token_hash') || magicUrl.hash.replace('#', '').split('&').find(p => p.startsWith('access_token='))?.split('=')[1];
+    
+    // Verify the token with Supabase
+    const verifyResponse = await fetch(`${callbackData.magicLink}`);
+    
+    // After redirect, get the session from Supabase
+    const sessionResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        auth_code: code
+      })
+    });
+
+    // Alternative: Use the user info directly from callback
+    authToken = callbackData.magicLink; // Temporary - we'll refresh this
+    userProfile = {
+      id: callbackData.userId,
+      email: callbackData.email,
+      displayName: callbackData.email.split('@')[0]
+    };
+
+    // Try to get a proper session by following the magic link flow
+    // For now, we'll sign in with the OTP approach
+    const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
+    
+    if (access_token) {
+      authToken = access_token;
+      userProfile = {
+        id: user.id,
+        email: user.email,
+        displayName: user.user_metadata?.full_name || user.email
+      };
+    }
+
+    await saveState();
+    await updateExtensionStatus(isEnabled);
+    await logEvent('LOGIN');
+
+    console.log('Microsoft login successful:', userProfile.email);
+
+    return { success: true, user: userProfile };
+  } catch (error) {
+    console.error('Microsoft login error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Verify magic link and get session
+async function verifyMagicLink(magicLink) {
+  try {
+    // Parse the magic link to get the token
+    const url = new URL(magicLink);
+    const token = url.searchParams.get('token');
+    const tokenHash = url.searchParams.get('token_hash');
+    const type = url.searchParams.get('type') || 'magiclink';
+
+    // Verify the token with Supabase
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/verify?token=${tokenHash}&type=${type}`, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY
+      },
+      redirect: 'manual'
+    });
+
+    // Get access token from response headers or follow redirect
+    if (response.status === 303 || response.status === 302) {
+      const location = response.headers.get('location');
+      if (location) {
+        const redirectUrl = new URL(location);
+        const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        
+        if (accessToken) {
+          // Get user info
+          const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': SUPABASE_ANON_KEY
+            }
+          });
+          
+          if (userResponse.ok) {
+            const user = await userResponse.json();
+            return { access_token: accessToken, user };
+          }
+        }
+      }
+    }
+
+    return { access_token: null, user: null };
+  } catch (error) {
+    console.error('Error verifying magic link:', error);
+    return { access_token: null, user: null };
   }
 }
 

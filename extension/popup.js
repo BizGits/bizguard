@@ -6,6 +6,7 @@ const mainSection = document.getElementById('main-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const loginBtn = document.getElementById('login-btn');
+const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const enableToggle = document.getElementById('enable-toggle');
 const toggleStatus = document.getElementById('toggle-status');
@@ -117,6 +118,38 @@ function updateStatusBadge() {
 }
 
 // Event Handlers
+
+// Microsoft login button
+microsoftLoginBtn.addEventListener('click', async () => {
+  // Show loading
+  microsoftLoginBtn.disabled = true;
+  microsoftLoginBtn.querySelector('.btn-text').textContent = 'Signing in...';
+  microsoftLoginBtn.querySelector('.btn-loader').classList.remove('hidden');
+  loginError.classList.add('hidden');
+  
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'MICROSOFT_LOGIN' });
+    
+    if (result.success) {
+      state.isAuthenticated = true;
+      state.userProfile = result.user;
+      
+      // Refresh state to get brands
+      state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      render();
+    } else {
+      loginError.textContent = result.error || 'Microsoft login failed';
+      loginError.classList.remove('hidden');
+    }
+  } catch (error) {
+    loginError.textContent = 'An error occurred. Please try again.';
+    loginError.classList.remove('hidden');
+  } finally {
+    microsoftLoginBtn.disabled = false;
+    microsoftLoginBtn.querySelector('.btn-text').textContent = 'Sign in with Microsoft';
+    microsoftLoginBtn.querySelector('.btn-loader').classList.add('hidden');
+  }
+});
 
 // Login form submit
 loginForm.addEventListener('submit', async (e) => {
