@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth, AppRole } from '@/lib/auth';
-import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Shield, 
@@ -44,25 +43,18 @@ const getBrowserIcon = (browser: string | null) => {
 
 export default function Users() {
   const { isAdmin, profile, isLoading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      navigate('/dashboard');
-      return;
-    }
-    if (!authLoading && isAdmin) {
+    if (!authLoading) {
       fetchUsers();
     }
-  }, [isAdmin, authLoading, navigate]);
+  }, [authLoading]);
 
   // Real-time subscription for profile updates
   useEffect(() => {
-    if (!isAdmin) return;
-
     const channel = supabase
       .channel('users-profiles')
       .on(
