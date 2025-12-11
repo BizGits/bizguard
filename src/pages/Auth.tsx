@@ -196,7 +196,7 @@ export default function Auth() {
 
           <div className="text-center">
             <p className="text-xs text-muted-foreground">
-              Sign in with your Bizcuits Microsoft account to access BWBlock
+              Sign in with your Bizcuits Microsoft account to access BizGuard!
             </p>
           </div>
         </CardContent>
