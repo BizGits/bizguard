@@ -62,9 +62,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="p-6 border-b border-glass-border/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={logo} alt="BWBlock" className="w-10 h-10 object-contain" />
+                <img src={logo} alt="BizGuard" className="w-10 h-10 object-contain" />
                 <div>
-                  <h1 className="text-lg font-semibold text-foreground">BWBlock</h1>
+                  <h1 className="text-lg font-semibold text-foreground">BizGuard</h1>
                   <p className="text-xs text-muted-foreground">v5 Dashboard</p>
                 </div>
               </div>
@@ -155,8 +155,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
-              <img src={logo} alt="BWBlock" className="w-8 h-8 object-contain" />
-              <span className="font-semibold">BWBlock</span>
+              <img src={logo} alt="BizGuard" className="w-8 h-8 object-contain" />
+              <span className="font-semibold">BizGuard</span>
             </div>
             <div className="w-10" /> {/* Spacer */}
           </div>
