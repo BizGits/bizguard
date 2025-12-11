@@ -176,6 +176,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex-1 p-4 lg:p-8">
           {children}
         </div>
+
+        {/* Footer */}
+        <footer className="border-t border-glass-border/20 px-4 py-3">
+          <div className="text-center">
+            <Link 
+              to="/privacy-policy" 
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Privacy Policy
+            </Link>
+          </div>
+        </footer>
       </main>
     </div>
   );

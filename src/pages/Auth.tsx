@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Loader2, Code, Download, Chrome, Globe, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -414,9 +414,12 @@ export default function Auth() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Sign in with your Bizcuits Microsoft account to access BizGuard
-        </p>
+        <div className="text-center text-xs text-slate-500 mt-6 space-y-2">
+          <p>Sign in with your Bizcuits Microsoft account to access BizGuard</p>
+          <Link to="/privacy-policy" className="text-slate-400 hover:text-slate-200 transition-colors underline">
+            Privacy Policy
+          </Link>
+        </div>
       </div>
     </div>
   );
