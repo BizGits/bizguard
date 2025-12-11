@@ -1,0 +1,176 @@
+import { ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Shield, 
+  Users, 
+  LogOut, 
+  Menu,
+  X,
+  ChevronRight
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useState } from 'react';
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: ReactNode;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { label: 'Brands', href: '/dashboard/brands', icon: <Shield className="w-5 h-5" />, adminOnly: true },
+  { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
+];
+
+export function DashboardLayout({ children }: { children: ReactNode }) {
+  const { profile, signOut, isAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+
+  return (
+    <div className="min-h-screen gradient-dark flex">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={cn(
+          "fixed lg:static inset-y-0 left-0 z-50 w-72 glass-panel border-r border-glass-border/20 transform transition-transform duration-300 ease-out lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="p-6 border-b border-glass-border/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
+                  <Shield className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-semibold text-foreground">BWBlock</h1>
+                  <p className="text-xs text-muted-foreground">v5 Dashboard</p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-1">
+            {filteredNavItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group",
+                    isActive 
+                      ? "bg-primary/15 text-primary" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  )}
+                >
+                  <span className={cn(
+                    "transition-colors",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )}>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                  {isActive && (
+                    <ChevronRight className="w-4 h-4 ml-auto text-primary" />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* User section */}
+          <div className="p-4 border-t border-glass-border/20">
+            <div className="glass-panel p-4 rounded-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
+                  <span className="text-sm font-medium text-foreground">
+                    {profile?.displayName?.charAt(0) || '?'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {profile?.displayName || 'Loading...'}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {profile?.role || 'User'}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
+              </Button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col min-h-screen">
+        {/* Mobile header */}
+        <header className="lg:hidden glass border-b border-glass-border/20 px-4 py-3 sticky top-0 z-30">
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+                <Shield className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <span className="font-semibold">BWBlock</span>
+            </div>
+            <div className="w-10" /> {/* Spacer */}
+          </div>
+        </header>
+
+        {/* Page content */}
+        <div className="flex-1 p-4 lg:p-8">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
