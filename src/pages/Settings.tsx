@@ -22,7 +22,6 @@ export default function Settings() {
   
   // Notification preferences
   const [notifications, setNotifications] = useState({
-    emailAlerts: localStorage.getItem('bizguard-email-alerts') !== 'false',
     browserNotifications: localStorage.getItem('bizguard-browser-notifications') === 'true',
     weeklyDigest: localStorage.getItem('bizguard-weekly-digest') !== 'false',
   });
@@ -212,25 +211,6 @@ export default function Settings() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-xl bg-accent/30">
-              <div className="flex items-center gap-3">
-                {notifications.emailAlerts ? (
-                  <Bell className="w-5 h-5 text-success" />
-                ) : (
-                  <BellOff className="w-5 h-5 text-muted-foreground" />
-                )}
-                <div>
-                  <p className="font-medium text-foreground">Email Alerts</p>
-                  <p className="text-sm text-muted-foreground">
-                    Receive email notifications for blocked terms
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={notifications.emailAlerts}
-                onCheckedChange={() => handleNotificationChange('emailAlerts')}
-              />
-            </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl bg-accent/30">
               <div className="flex items-center gap-3">
