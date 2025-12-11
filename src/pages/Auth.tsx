@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2 } from 'lucide-react';
+import { Shield, Loader2, Code } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+
+const DEV_CODE = 'Dev1234';
 
 export default function Auth() {
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showDevMode, setShowDevMode] = useState(false);
+  const [devCode, setDevCode] = useState('');
+  const [isDevSigningIn, setIsDevSigningIn] = useState(false);
 
   useEffect(() => {
     if (user && !isLoading) {
@@ -44,6 +50,67 @@ export default function Auth() {
       });
     } finally {
       setIsSigningIn(false);
+    }
+  };
+
+  const handleDevSignIn = async () => {
+    if (devCode !== DEV_CODE) {
+      toast({
+        title: 'Invalid code',
+        description: 'The dev code is incorrect',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsDevSigningIn(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'dev@bwblock.local',
+        password: DEV_CODE,
+      });
+
+      if (error) {
+        // If user doesn't exist, create them
+        if (error.message.includes('Invalid login credentials')) {
+          const { error: signUpError } = await supabase.auth.signUp({
+            email: 'dev@bwblock.local',
+            password: DEV_CODE,
+            options: {
+              data: {
+                full_name: 'Dev User',
+              },
+            },
+          });
+
+          if (signUpError) {
+            toast({
+              title: 'Dev sign in failed',
+              description: signUpError.message,
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Dev account created',
+              description: 'Signing you in...',
+            });
+          }
+        } else {
+          toast({
+            title: 'Dev sign in failed',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: 'Dev sign in failed',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDevSigningIn(false);
     }
   };
 
@@ -92,6 +159,40 @@ export default function Auth() {
               )}
               Sign in with Microsoft
             </Button>
+          </div>
+
+          {/* Dev Mode Toggle */}
+          <div className="pt-4 border-t border-border/50">
+            <button
+              onClick={() => setShowDevMode(!showDevMode)}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
+            >
+              <Code className="w-3 h-3" />
+              Dev Mode
+            </button>
+
+            {showDevMode && (
+              <div className="mt-4 space-y-3 animate-fade-in">
+                <Input
+                  type="password"
+                  placeholder="Enter dev code"
+                  value={devCode}
+                  onChange={(e) => setDevCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleDevSignIn()}
+                />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleDevSignIn}
+                  disabled={isDevSigningIn || !devCode}
+                >
+                  {isDevSigningIn ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  Sign in as Dev
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="text-center">
