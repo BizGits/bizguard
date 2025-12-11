@@ -27,18 +27,36 @@
     <section id="login-section" class="section login-section hidden">
       <div class="login-header">
         <h2>Sign In</h2>
-        <p>Login with your BizGuard account</p>
+        <p>Login with your Bizcuits account</p>
       </div>
+      
+      <!-- Microsoft Sign In Button -->
+      <button type="button" class="btn btn-microsoft btn-block" id="microsoft-login-btn">
+        <svg class="microsoft-icon" width="20" height="20" viewBox="0 0 21 21" fill="none">
+          <path d="M0 0h10v10H0V0z" fill="#F25022"/>
+          <path d="M11 0h10v10H11V0z" fill="#7FBA00"/>
+          <path d="M0 11h10v10H0V11z" fill="#00A4EF"/>
+          <path d="M11 11h10v10H11V11z" fill="#FFB900"/>
+        </svg>
+        <span class="btn-text">Sign in with Microsoft</span>
+        <span class="btn-loader hidden"></span>
+      </button>
+      
+      <div id="login-error" class="error-message hidden"></div>
+      
+      <div class="login-divider">
+        <span>or use email</span>
+      </div>
+      
       <form id="login-form" class="login-form">
         <div class="form-group">
           <label for="email">Email</label>
-          <input type="email" id="email" placeholder="you@company.com" required>
+          <input type="email" id="email" placeholder="you@bizcuits.io" required>
         </div>
         <div class="form-group">
           <label for="password">Password</label>
           <input type="password" id="password" placeholder="••••••••" required>
         </div>
-        <div id="login-error" class="error-message hidden"></div>
         <button type="submit" class="btn btn-primary btn-block" id="login-btn">
           <span class="btn-text">Sign In</span>
           <span class="btn-loader hidden"></span>
