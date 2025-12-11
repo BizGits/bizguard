@@ -60,41 +60,41 @@ export function BlockingChart({ events, days = 7 }: BlockingChartProps) {
       <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="blockedGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0.4} />
+            <stop offset="5%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0.3} />
             <stop offset="95%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="toggledGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(142, 76%, 46%)" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="hsl(142, 76%, 46%)" stopOpacity={0} />
+            <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid 
           strokeDasharray="3 3" 
-          stroke="hsl(217, 33%, 18%)" 
+          stroke="hsl(var(--border))" 
           vertical={false}
         />
         <XAxis 
           dataKey="date" 
           axisLine={false}
           tickLine={false}
-          tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: 12 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
           dy={10}
         />
         <YAxis 
           axisLine={false}
           tickLine={false}
-          tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: 12 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
           dx={-10}
         />
         <Tooltip 
           contentStyle={{
-            backgroundColor: 'hsl(222, 47%, 10%)',
-            border: '1px solid hsl(217, 33%, 22%)',
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
             borderRadius: '12px',
-            boxShadow: '0 8px 24px -4px hsl(222, 47%, 4%, 0.6)',
+            boxShadow: '0 8px 24px -4px hsl(var(--foreground) / 0.1)',
           }}
-          labelStyle={{ color: 'hsl(210, 40%, 98%)', fontWeight: 500, marginBottom: 4 }}
-          itemStyle={{ color: 'hsl(215, 20%, 65%)', fontSize: 12 }}
+          labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 500, marginBottom: 4 }}
+          itemStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
         <Area
           type="monotone"
@@ -109,7 +109,7 @@ export function BlockingChart({ events, days = 7 }: BlockingChartProps) {
           type="monotone"
           dataKey="toggled"
           name="Toggled"
-          stroke="hsl(142, 76%, 46%)"
+          stroke="hsl(142, 76%, 36%)"
           strokeWidth={2}
           fillOpacity={1}
           fill="url(#toggledGradient)"

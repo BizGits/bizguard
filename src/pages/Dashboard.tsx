@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { formatDistanceToNow, subDays } from 'date-fns';
 import { BlockingChart } from '@/components/dashboard/BlockingChart';
 import { ActionPieChart } from '@/components/dashboard/ActionPieChart';
+import { toast } from '@/hooks/use-toast';
 
 interface StatsCard {
   title: string;
@@ -35,121 +36,180 @@ export default function Dashboard() {
   const [chartEvents, setChartEvents] = useState<{ id: string; action: string; created_at: string }[]>([]);
   const [activeUsers, setActiveUsers] = useState<{ id: string; display_name: string; last_seen_at: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLive, setIsLive] = useState(false);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        // Fetch events for last 7 days for charts
-        const sevenDaysAgo = subDays(new Date(), 7);
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      // Fetch events for last 7 days for charts
+      const sevenDaysAgo = subDays(new Date(), 7);
+      
+      const { data: chartData } = await supabase
+        .from('events')
+        .select('id, action, created_at')
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+      setChartEvents(chartData || []);
+
+      // Fetch events count for last 24h
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const { count: blockedCount } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('action', 'BLOCKED')
+        .gte('created_at', yesterday.toISOString());
+
+      // Fetch active users (last 10 mins)
+      const tenMinsAgo = new Date();
+      tenMinsAgo.setMinutes(tenMinsAgo.getMinutes() - 10);
+      
+      if (isAdmin) {
+        const { data: activeUsersData } = await supabase
+          .from('profiles')
+          .select('id, display_name, last_seen_at')
+          .gte('last_seen_at', tenMinsAgo.toISOString());
         
-        const { data: chartData } = await supabase
-          .from('events')
-          .select('id, action, created_at')
-          .gte('created_at', sevenDaysAgo.toISOString())
-          .order('created_at', { ascending: false });
-
-        setChartEvents(chartData || []);
-
-        // Fetch events count for last 24h
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        const { count: blockedCount } = await supabase
-          .from('events')
-          .select('*', { count: 'exact', head: true })
-          .eq('action', 'BLOCKED')
-          .gte('created_at', yesterday.toISOString());
-
-        // Fetch active users (last 10 mins)
-        const tenMinsAgo = new Date();
-        tenMinsAgo.setMinutes(tenMinsAgo.getMinutes() - 10);
-        
-        if (isAdmin) {
-          const { data: activeUsersData } = await supabase
-            .from('profiles')
-            .select('id, display_name, last_seen_at')
-            .gte('last_seen_at', tenMinsAgo.toISOString());
-          
-          setActiveUsers(activeUsersData || []);
-        }
-
-        // Fetch brands count
-        const { count: brandsCount } = await supabase
-          .from('brands')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
-
-        // Fetch recent events
-        const { data: eventsData } = await supabase
-          .from('events')
-          .select(`
-            id,
-            action,
-            term,
-            url,
-            created_at,
-            profiles:user_id (display_name),
-            brands:brand_id (name)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        setRecentEvents(eventsData || []);
-
-        // Calculate week over week change
-        const twoWeeksAgo = subDays(new Date(), 14);
-        const { count: lastWeekBlocked } = await supabase
-          .from('events')
-          .select('*', { count: 'exact', head: true })
-          .eq('action', 'BLOCKED')
-          .gte('created_at', twoWeeksAgo.toISOString())
-          .lt('created_at', sevenDaysAgo.toISOString());
-
-        const thisWeekBlocked = chartData?.filter(e => e.action === 'BLOCKED').length || 0;
-        const weekChange = lastWeekBlocked 
-          ? Math.round(((thisWeekBlocked - lastWeekBlocked) / lastWeekBlocked) * 100)
-          : 0;
-
-        setStats([
-          {
-            title: 'Blocked Terms (24h)',
-            value: blockedCount || 0,
-            icon: <AlertTriangle className="w-5 h-5 text-destructive" />,
-            change: `${weekChange >= 0 ? '+' : ''}${weekChange}% vs last week`,
-            changeType: weekChange > 0 ? 'negative' : weekChange < 0 ? 'positive' : 'neutral',
-          },
-          {
-            title: 'Active Agents',
-            value: activeUsers.length,
-            icon: <Activity className="w-5 h-5 text-success" />,
-          },
-          {
-            title: 'Protected Brands',
-            value: brandsCount || 0,
-            icon: <Shield className="w-5 h-5 text-primary" />,
-          },
-          {
-            title: 'Weekly Events',
-            value: chartData?.length || 0,
-            icon: <TrendingUp className="w-5 h-5 text-info" />,
-          },
-        ]);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setIsLoading(false);
+        setActiveUsers(activeUsersData || []);
       }
-    };
 
-    fetchDashboardData();
+      // Fetch brands count
+      const { count: brandsCount } = await supabase
+        .from('brands')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+
+      // Fetch recent events
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select(`
+          id,
+          action,
+          term,
+          url,
+          created_at,
+          profiles:user_id (display_name),
+          brands:brand_id (name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      setRecentEvents(eventsData || []);
+
+      // Calculate week over week change
+      const twoWeeksAgo = subDays(new Date(), 14);
+      const { count: lastWeekBlocked } = await supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('action', 'BLOCKED')
+        .gte('created_at', twoWeeksAgo.toISOString())
+        .lt('created_at', sevenDaysAgo.toISOString());
+
+      const thisWeekBlocked = chartData?.filter(e => e.action === 'BLOCKED').length || 0;
+      const weekChange = lastWeekBlocked 
+        ? Math.round(((thisWeekBlocked - lastWeekBlocked) / lastWeekBlocked) * 100)
+        : 0;
+
+      setStats([
+        {
+          title: 'Blocked Terms (24h)',
+          value: blockedCount || 0,
+          icon: <AlertTriangle className="w-5 h-5 text-destructive" />,
+          change: `${weekChange >= 0 ? '+' : ''}${weekChange}% vs last week`,
+          changeType: weekChange > 0 ? 'negative' : weekChange < 0 ? 'positive' : 'neutral',
+        },
+        {
+          title: 'Active Agents',
+          value: activeUsers.length,
+          icon: <Activity className="w-5 h-5 text-success" />,
+        },
+        {
+          title: 'Protected Brands',
+          value: brandsCount || 0,
+          icon: <Shield className="w-5 h-5 text-primary" />,
+        },
+        {
+          title: 'Weekly Events',
+          value: chartData?.length || 0,
+          icon: <TrendingUp className="w-5 h-5 text-info" />,
+        },
+      ]);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [isAdmin]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-events')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'events',
+        },
+        async (payload) => {
+          setIsLive(true);
+          
+          // Fetch the complete event with relations
+          const { data: newEvent } = await supabase
+            .from('events')
+            .select(`
+              id,
+              action,
+              term,
+              url,
+              created_at,
+              profiles:user_id (display_name),
+              brands:brand_id (name)
+            `)
+            .eq('id', payload.new.id)
+            .single();
+
+          if (newEvent) {
+            // Add to recent events
+            setRecentEvents(prev => [newEvent, ...prev.slice(0, 9)]);
+            
+            // Add to chart events
+            setChartEvents(prev => [
+              { id: newEvent.id, action: newEvent.action, created_at: newEvent.created_at },
+              ...prev,
+            ]);
+
+            // Show toast notification
+            toast({
+              title: 'New Event',
+              description: `${newEvent.action}: ${newEvent.term || newEvent.brands?.name || 'System event'}`,
+            });
+          }
+
+          // Reset live indicator after animation
+          setTimeout(() => setIsLive(false), 2000);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const getActionColor = (action: string) => {
     switch (action) {
-      case 'BLOCKED': return 'text-destructive bg-destructive/20';
-      case 'TOGGLED_OFF': return 'text-warning bg-warning/20';
-      case 'TOGGLED_ON': return 'text-success bg-success/20';
-      case 'LOGIN': return 'text-info bg-info/20';
+      case 'BLOCKED': return 'text-destructive bg-destructive/10';
+      case 'TOGGLED_OFF': return 'text-warning bg-warning/10';
+      case 'TOGGLED_ON': return 'text-success bg-success/10';
+      case 'LOGIN': return 'text-info bg-info/10';
       default: return 'text-muted-foreground bg-muted';
     }
   };
@@ -158,9 +218,19 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="space-y-8 animate-fade-in">
         {/* Page header */}
-        <div>
-          <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Overview of BizGuard activity</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Overview of BizGuard activity</p>
+          </div>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+            isLive 
+              ? 'bg-success/20 text-success animate-pulse' 
+              : 'bg-muted text-muted-foreground'
+          }`}>
+            <Zap className={`w-3 h-3 ${isLive ? 'animate-bounce' : ''}`} />
+            {isLive ? 'Live Update' : 'Real-time'}
+          </div>
         </div>
 
         {/* Stats grid */}
@@ -277,7 +347,12 @@ export default function Dashboard() {
           {/* Recent events */}
           <Card variant="glass" className={`animate-slide-up ${isAdmin ? 'lg:col-span-2' : 'lg:col-span-3'}`} style={{ animationDelay: '350ms' }}>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Recent Events</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                Recent Events
+                {isLive && (
+                  <span className="w-2 h-2 rounded-full bg-success animate-ping" />
+                )}
+              </CardTitle>
               <Button variant="ghost" size="sm" asChild className="gap-1">
                 <Link to="/dashboard/events">
                   View all
@@ -290,10 +365,12 @@ export default function Dashboard() {
                 <p className="text-sm text-muted-foreground">No events yet</p>
               ) : (
                 <div className="space-y-3">
-                  {recentEvents.slice(0, 5).map((event) => (
+                  {recentEvents.slice(0, 5).map((event, index) => (
                     <div 
                       key={event.id} 
-                      className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
+                      className={`flex items-center justify-between py-2 border-b border-border/50 last:border-0 transition-all duration-300 ${
+                        index === 0 && isLive ? 'bg-success/5 -mx-2 px-2 rounded-lg' : ''
+                      }`}
                     >
                       <div className="flex items-center gap-3">
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${getActionColor(event.action)}`}>

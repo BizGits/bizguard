@@ -10,6 +10,7 @@ import Brands from "./pages/Brands";
 import Users from "./pages/Users";
 import Events from "./pages/Events";
 import Settings from "./pages/Settings";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -20,7 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen gradient-dark flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/dashboard/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
             <Route path="/dashboard/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
             <Route path="/dashboard/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+            <Route path="/dashboard/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
