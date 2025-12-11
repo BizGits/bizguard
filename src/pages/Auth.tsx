@@ -194,7 +194,7 @@ export default function Auth() {
     const downloadUrl = `${SUPABASE_URL}/functions/v1/extension-download`;
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = 'bizguard-extension-v5.zip';
+    link.download = 'bizguard-extension-v5.1.zip';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -311,7 +311,7 @@ export default function Auth() {
           {/* Right Card - Extension Install */}
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl shadow-black/40 p-6">
             <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-slate-50">Install BWBlock Extension</h2>
+              <h2 className="text-xl font-semibold text-slate-50">Install BizGuard Extension</h2>
               <p className="text-slate-300 text-sm mt-2">
                 Agents do not need a dashboard login. Just install the extension and sign in from the pill inside the browser.
               </p>
@@ -323,7 +323,7 @@ export default function Auth() {
               onClick={handleDownload}
             >
               <Download className="w-5 h-5 mr-2" />
-              Download BWBlock Extension v5
+              Download BizGuard Extension v5.1
             </Button>
 
             {/* Installation Steps */}
