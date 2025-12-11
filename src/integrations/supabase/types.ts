@@ -117,25 +117,37 @@ export type Database = {
       }
       profiles: {
         Row: {
+          browser: string | null
+          browser_version: string | null
           created_at: string
           display_name: string
           email: string
+          extension_active: boolean | null
+          extension_version: string | null
           id: string
           last_seen_at: string
           ms_id: string | null
         }
         Insert: {
+          browser?: string | null
+          browser_version?: string | null
           created_at?: string
           display_name: string
           email: string
+          extension_active?: boolean | null
+          extension_version?: string | null
           id: string
           last_seen_at?: string
           ms_id?: string | null
         }
         Update: {
+          browser?: string | null
+          browser_version?: string | null
           created_at?: string
           display_name?: string
           email?: string
+          extension_active?: boolean | null
+          extension_version?: string | null
           id?: string
           last_seen_at?: string
           ms_id?: string | null
