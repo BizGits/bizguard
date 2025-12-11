@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.extension-download]
 verify_jwt = false
+
+[functions.azure-auth-init]
+verify_jwt = false
+
+[functions.azure-auth-callback]
+verify_jwt = false
