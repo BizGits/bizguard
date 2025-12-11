@@ -7,7 +7,9 @@ import {
   LogOut, 
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  Activity,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -23,8 +25,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { label: 'Events', href: '/dashboard/events', icon: <Activity className="w-5 h-5" /> },
   { label: 'Brands', href: '/dashboard/brands', icon: <Tags className="w-5 h-5" />, adminOnly: true },
   { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
+  { label: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
