@@ -20,9 +20,9 @@ interface ActionPieChartProps {
 const ACTION_COLORS: Record<string, string> = {
   BLOCKED: 'hsl(0, 72%, 51%)',
   TOGGLED_OFF: 'hsl(38, 92%, 50%)',
-  TOGGLED_ON: 'hsl(142, 76%, 46%)',
+  TOGGLED_ON: 'hsl(142, 76%, 36%)',
   LOGIN: 'hsl(199, 89%, 48%)',
-  LOGOUT: 'hsl(215, 20%, 45%)',
+  LOGOUT: 'hsl(220, 9%, 46%)',
 };
 
 export function ActionPieChart({ events }: ActionPieChartProps) {
@@ -37,7 +37,7 @@ export function ActionPieChart({ events }: ActionPieChartProps) {
       .map(([action, count]) => ({
         name: action.charAt(0) + action.slice(1).toLowerCase().replace('_', ' '),
         value: count,
-        color: ACTION_COLORS[action] || 'hsl(215, 20%, 45%)',
+        color: ACTION_COLORS[action] || 'hsl(220, 9%, 46%)',
       }))
       .sort((a, b) => b.value - a.value);
   }, [events]);
@@ -68,13 +68,13 @@ export function ActionPieChart({ events }: ActionPieChartProps) {
         </Pie>
         <Tooltip
           contentStyle={{
-            backgroundColor: 'hsl(222, 47%, 10%)',
-            border: '1px solid hsl(217, 33%, 22%)',
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
             borderRadius: '12px',
-            boxShadow: '0 8px 24px -4px hsl(222, 47%, 4%, 0.6)',
+            boxShadow: '0 8px 24px -4px hsl(var(--foreground) / 0.1)',
           }}
-          labelStyle={{ color: 'hsl(210, 40%, 98%)', fontWeight: 500 }}
-          itemStyle={{ color: 'hsl(215, 20%, 65%)', fontSize: 12 }}
+          labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 500 }}
+          itemStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
         <Legend
           verticalAlign="middle"
@@ -82,7 +82,8 @@ export function ActionPieChart({ events }: ActionPieChartProps) {
           layout="vertical"
           iconType="circle"
           iconSize={8}
-          wrapperStyle={{ fontSize: 12, color: 'hsl(215, 20%, 65%)' }}
+          wrapperStyle={{ fontSize: 12 }}
+          formatter={(value) => <span style={{ color: 'hsl(var(--muted-foreground))' }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>

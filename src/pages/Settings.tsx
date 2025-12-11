@@ -15,9 +15,9 @@ export default function Settings() {
   const { profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   
-  // Theme state (persisted in localStorage)
+  // Theme state (persisted in localStorage) - default to light
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('bizguard-theme') !== 'light';
+    return localStorage.getItem('bizguard-theme') === 'dark';
   });
   
   // Notification preferences
