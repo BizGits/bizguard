@@ -173,7 +173,7 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity"],
   "host_permissions": [
@@ -249,7 +249,7 @@ async function generateCodeChallenge(verifier) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.2 installed');
+  console.log('BizGuard v5.3 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -598,7 +598,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.2</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.3</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -658,7 +658,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.2
+const readmeMd = `# BizGuard Extension v5.3
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -682,7 +682,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.2...');
+    console.log('Generating extension ZIP v5.3...');
     
     const zip = new JSZip();
     
@@ -711,7 +711,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.2.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.3.zip"',
       },
     });
   } catch (error: unknown) {
