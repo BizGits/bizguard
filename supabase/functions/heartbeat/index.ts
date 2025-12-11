@@ -25,7 +25,6 @@ serve(async (req) => {
       );
     }
 
-    // Create client with user's token for auth
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
     // Verify the user's token
@@ -33,47 +32,56 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !user) {
+      console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ error: "Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const body = await req.json();
-    const { extension_active, browser, browser_version, extension_version } = body;
+    // Parse body for optional extension info
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Body is optional for heartbeat
+    }
+
+    const { browser, browser_version, extension_version } = body;
     const now = new Date().toISOString();
 
-    // Update the user's profile with extension status
+    // Update heartbeat and extension status
+    const updateData: any = {
+      last_heartbeat: now,
+      last_seen_at: now,
+      extension_active: true,
+    };
+
+    // Only update browser info if provided
+    if (browser) updateData.browser = browser;
+    if (browser_version) updateData.browser_version = browser_version;
+    if (extension_version) updateData.extension_version = extension_version;
+
     const { error: updateError } = await supabaseClient
       .from("profiles")
-      .update({
-        extension_active: extension_active ?? false,
-        browser: browser || null,
-        browser_version: browser_version || null,
-        extension_version: extension_version || null,
-        last_seen_at: now,
-        last_heartbeat: extension_active ? now : null,
-      })
+      .update(updateData)
       .eq("id", user.id);
 
     if (updateError) {
       console.error("Update error:", updateError);
       return new Response(
-        JSON.stringify({ error: "Failed to update extension status" }),
+        JSON.stringify({ error: "Failed to update heartbeat" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Log the event
-    await supabaseClient.from("events").insert({
-      user_id: user.id,
-      action: extension_active ? "TOGGLED_ON" : "TOGGLED_OFF",
-    });
+    console.log(`Heartbeat received from user ${user.id} at ${now}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Extension status updated to ${extension_active ? 'active' : 'inactive'}` 
+        timestamp: now,
+        message: "Heartbeat recorded"
       }),
       { 
         status: 200, 
