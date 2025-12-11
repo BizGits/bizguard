@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizGuard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <img src="icons/icon48.png" alt="BizGuard" class="logo-icon">
+        <div class="logo-text">
+          <h1>BizGuard</h1>
+          <span class="version">v5.0</span>
+        </div>
+      </div>
+      <div id="status-badge" class="status-badge active">
+        <span class="status-dot"></span>
+        <span class="status-text">Active</span>
+      </div>
+    </header>
+
+    <!-- Login Section (shown when not authenticated) -->
+    <section id="login-section" class="section login-section hidden">
+      <div class="login-header">
+        <h2>Sign In</h2>
+        <p>Login with your BizGuard account</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="••••••••" required>
+        </div>
+        <div id="login-error" class="error-message hidden"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-loader hidden"></span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Main Section (shown when authenticated) -->
+    <section id="main-section" class="section hidden">
+      <!-- User Info -->
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-info">
+          <p class="user-name" id="user-name">Loading...</p>
+          <p class="user-email" id="user-email">-</p>
+        </div>
+        <button class="btn btn-ghost btn-icon" id="logout-btn" title="Sign Out">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Toggle -->
+      <div class="toggle-card">
+        <div class="toggle-info">
+          <span class="toggle-label">Protection</span>
+          <span class="toggle-status" id="toggle-status">Enabled</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="enable-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Brand Selector -->
+      <div class="brand-section">
+        <div class="section-header">
+          <h3>Active Brand</h3>
+          <button class="btn btn-ghost btn-sm" id="refresh-brands" title="Refresh brands">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+              <path d="M21 21v-5h-5"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="brand-select-wrapper">
+          <select id="brand-select" class="brand-select">
+            <option value="">Select a brand...</option>
+          </select>
+        </div>
+        <p class="brand-hint" id="brand-hint">
+          Select the brand you're currently working with
+        </p>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-section">
+        <div class="stat-card">
+          <span class="stat-value" id="brands-count">0</span>
+          <span class="stat-label">Brands</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="terms-count">0</span>
+          <span class="stat-label">Protected Terms</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <a href="https://word.bizcuits.io/dashboard" target="_blank" class="footer-link">
+        Open Dashboard
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
