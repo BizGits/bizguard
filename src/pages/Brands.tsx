@@ -19,7 +19,8 @@ interface Brand {
 }
 
 export default function Brands() {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
+  const canEdit = true; // Both ADMIN and MANAGEMENT can edit
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -265,10 +266,10 @@ export default function Brands() {
           <div>
             <h1 className="text-3xl font-semibold text-foreground">Brands</h1>
             <p className="text-muted-foreground mt-1">
-              {isAdmin ? 'Manage protected brands and their terms' : 'View protected brands and their terms'}
+              Manage protected brands and their terms
             </p>
           </div>
-          {isAdmin && (
+          {canEdit && (
             <Button 
               onClick={() => setIsCreating(true)} 
               disabled={isCreating}
@@ -281,7 +282,7 @@ export default function Brands() {
         </div>
 
         {/* Create brand modal/form */}
-        {isCreating && isAdmin && (
+        {isCreating && canEdit && (
           <Card variant="glass" className="animate-scale-in border border-border/50">
             <CardContent className="p-6">
               <h3 className="text-lg font-medium text-foreground mb-4">Create New Brand</h3>
@@ -374,7 +375,7 @@ export default function Brands() {
                 <CardHeader className="border-b border-border/30 pb-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
-                      {isAdmin ? (
+                      {canEdit ? (
                         <div className="space-y-2">
                           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Brand Name</label>
                           <Input
@@ -395,7 +396,7 @@ export default function Brands() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      {isAdmin && (
+                      {canEdit && (
                         <>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">Active</span>
@@ -420,7 +421,7 @@ export default function Brands() {
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
                   {/* Add term - Admin only */}
-                  {isAdmin && (
+                  {canEdit && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <Tag className="w-4 h-4 text-muted-foreground" />
@@ -468,7 +469,7 @@ export default function Brands() {
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/50 border border-border/30 text-sm text-foreground group transition-all hover:bg-accent/70"
                           >
                             {term.term}
-                            {isAdmin && (
+                            {canEdit && (
                               <button 
                                 onClick={() => deleteTerm(term.id)}
                                 className="w-4 h-4 rounded-full hover:bg-destructive/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -488,7 +489,7 @@ export default function Brands() {
                 <Building2 className="w-16 h-16 text-muted-foreground/30 mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">No Brand Selected</h3>
                 <p className="text-muted-foreground max-w-sm">
-                  Select a brand from the list to view its details{isAdmin ? ' or create a new one to begin.' : '.'}
+                  Select a brand from the list to view its details{canEdit ? ' or create a new one to begin.' : '.'}
                 </p>
               </CardContent>
             )}
