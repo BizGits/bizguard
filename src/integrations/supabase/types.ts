@@ -115,6 +115,30 @@ export type Database = {
           },
         ]
       }
+      invitations: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           browser: string | null

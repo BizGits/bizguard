@@ -59,7 +59,17 @@ export default function Auth() {
           description: response.error.message || 'Azure authentication failed',
           variant: 'destructive',
         });
-        // Clear the URL params
+        window.history.replaceState({}, '', '/auth');
+        return;
+      }
+
+      // Check for not_invited error
+      if (response.data?.error === 'not_invited') {
+        toast({
+          title: 'Access Denied',
+          description: response.data.message || 'You have not been invited to access the dashboard.',
+          variant: 'destructive',
+        });
         window.history.replaceState({}, '', '/auth');
         return;
       }
