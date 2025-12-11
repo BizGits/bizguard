@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2, Code } from 'lucide-react';
+import { Loader2, Code } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+import logo from '@/assets/logo.png';
 
 const DEV_CODE = 'Dev1234';
 
@@ -132,9 +133,7 @@ export default function Auth() {
 
       <Card variant="glass" className="w-full max-w-md animate-scale-in relative z-10">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-glow mb-4">
-            <Shield className="w-8 h-8 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="BWBlock" className="mx-auto w-20 h-20 object-contain mb-4" />
           <CardTitle className="text-2xl">Welcome to BWBlock</CardTitle>
           <CardDescription className="text-muted-foreground">
             Brand protection for your team
