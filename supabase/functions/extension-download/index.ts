@@ -67,6 +67,26 @@ let isEnabled = true;
 let authToken = null;
 let userProfile = null;
 
+// PKCE Helper Functions
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\\+/g, '-')
+    .replace(/\\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(hash)))
+    .replace(/\\+/g, '-')
+    .replace(/\\//g, '_')
+    .replace(/=+$/, '');
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('BizGuard v5.1 installed');
   await loadState();
@@ -211,10 +231,17 @@ async function handleMicrosoftLogin() {
   try {
     const redirectUri = chrome.identity.getRedirectURL();
     
+    // Generate PKCE code verifier and challenge
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    console.log('Starting Microsoft login with PKCE...');
+    console.log('Redirect URI:', redirectUri);
+    
     const initResponse = await fetch(API_BASE + '/azure-auth-init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redirectUri })
+      body: JSON.stringify({ redirectUri, codeChallenge })
     });
 
     if (!initResponse.ok) throw new Error('Failed to initialize Azure login');
@@ -234,10 +261,11 @@ async function handleMicrosoftLogin() {
     if (error) throw new Error(url.searchParams.get('error_description') || error);
     if (!code) throw new Error('No authorization code received');
 
+    // Exchange code with PKCE code_verifier
     const callbackResponse = await fetch(API_BASE + '/azure-auth-callback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, redirectUri })
+      body: JSON.stringify({ code, redirectUri, codeVerifier })
     });
 
     const callbackData = await callbackResponse.json();

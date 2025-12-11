@@ -28,7 +28,7 @@ serve(async (req) => {
       });
     }
 
-    const { redirectUri } = await req.json();
+    const { redirectUri, codeChallenge } = await req.json();
     
     // Generate a random state for CSRF protection
     const state = crypto.randomUUID();
@@ -41,6 +41,13 @@ serve(async (req) => {
     authUrl.searchParams.set('scope', 'openid profile email User.Read');
     authUrl.searchParams.set('response_mode', 'query');
     authUrl.searchParams.set('state', state);
+    
+    // Add PKCE parameters if provided (required for extensions/SPAs)
+    if (codeChallenge) {
+      authUrl.searchParams.set('code_challenge', codeChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      console.log('PKCE enabled with code_challenge');
+    }
 
     console.log('Generated Azure AD auth URL for redirect');
 
