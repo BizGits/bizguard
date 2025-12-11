@@ -26,9 +26,17 @@ serve(async (req) => {
       });
     }
 
-    const { code, redirectUri } = await req.json();
+    const body = await req.json();
+    const { code, redirectUri } = body;
+    
+    console.log('Callback received:', { 
+      hasCode: !!code, 
+      redirectUri,
+      codeLength: code?.length 
+    });
 
     if (!code) {
+      console.error('No authorization code provided in request');
       return new Response(JSON.stringify({ error: 'No authorization code provided' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -139,11 +147,16 @@ serve(async (req) => {
     }
 
     // Generate a magic link / session for the user
+    // Extract base URL and redirect to dashboard
+    const baseUrl = redirectUri.replace(/\/auth.*$/, '');
+    const dashboardUrl = `${baseUrl}/dashboard`;
+    console.log('Generating magic link with redirect to:', dashboardUrl);
+    
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: email,
       options: {
-        redirectTo: redirectUri.replace('/auth/azure/callback', '/dashboard'),
+        redirectTo: dashboardUrl,
       },
     });
 

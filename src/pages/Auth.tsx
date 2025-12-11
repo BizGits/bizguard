@@ -24,7 +24,20 @@ export default function Auth() {
   // Handle Azure AD callback
   useEffect(() => {
     const code = searchParams.get('code');
-    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    
+    // Handle Azure AD errors
+    if (error) {
+      console.error('Azure AD error:', error, errorDescription);
+      toast({
+        title: 'Sign in failed',
+        description: errorDescription || `Azure AD error: ${error}`,
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, '', '/auth');
+      return;
+    }
     
     if (code && !user) {
       handleAzureCallback(code);
