@@ -173,7 +173,7 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.3.0",
+  "version": "5.4.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity"],
   "host_permissions": [
@@ -249,7 +249,7 @@ async function generateCodeChallenge(verifier) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.3 installed');
+  console.log('BizGuard v5.4 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -350,8 +350,6 @@ async function handleMessage(message, sender) {
       await saveState();
       notifyContentScripts({ type: 'BRAND_CHANGED', currentBrand });
       return { success: true };
-    case 'LOGIN':
-      return await handleLogin(message.email, message.password);
     case 'MICROSOFT_LOGIN':
       return await handleMicrosoftLogin();
     case 'LOGOUT':
@@ -366,25 +364,6 @@ async function handleMessage(message, sender) {
       return { success: true };
     default:
       return { error: 'Unknown message type' };
-  }
-}
-
-async function handleLogin(email, password) {
-  try {
-    const response = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error_description || 'Login failed');
-    authToken = data.access_token;
-    userProfile = { id: data.user.id, email: data.user.email, displayName: data.user.user_metadata?.full_name || data.user.email };
-    await saveState();
-    await logEvent('LOGIN', {});
-    return { success: true, user: userProfile };
-  } catch (error) {
-    return { success: false, error: error.message };
   }
 }
 
@@ -437,6 +416,12 @@ async function handleMicrosoftLogin() {
     if (callbackData.magicLink) {
       const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
       if (access_token && user) {
+        // Validate domain - only allow bizcuits.io
+        const email = user.email?.toLowerCase() || '';
+        if (!email.endsWith('@bizcuits.io')) {
+          throw new Error('Only @bizcuits.io accounts are allowed');
+        }
+        
         authToken = access_token;
         userProfile = { id: user.id, email: user.email, displayName: user.user_metadata?.full_name || user.email };
         await saveState();
@@ -598,11 +583,11 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.3</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.4</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
-    <div class="login-header"><h2>Sign In</h2><p>Login with your Bizcuits account</p></div>
+    <div class="login-header"><h2>Sign In</h2><p>Login with your Bizcuits Microsoft account</p></div>
     <button type="button" class="btn btn-microsoft btn-block" id="microsoft-login-btn">
       <svg class="microsoft-icon" width="20" height="20" viewBox="0 0 21 21" fill="none">
         <path d="M0 0h10v10H0V0z" fill="#F25022"/><path d="M11 0h10v10H11V0z" fill="#7FBA00"/>
@@ -612,12 +597,7 @@ const popupHtml = `<!DOCTYPE html>
       <span class="btn-loader hidden"></span>
     </button>
     <div id="login-error" class="error-message hidden"></div>
-    <div class="login-divider"><span>or use email</span></div>
-    <form id="login-form" class="login-form">
-      <div class="form-group"><label for="email">Email</label><input type="email" id="email" placeholder="you@bizcuits.io" required></div>
-      <div class="form-group"><label for="password">Password</label><input type="password" id="password" placeholder="••••••••" required></div>
-      <button type="submit" class="btn btn-primary btn-block" id="login-btn"><span class="btn-text">Sign In</span><span class="btn-loader hidden"></span></button>
-    </form>
+    <p class="domain-hint">Only @bizcuits.io accounts are allowed</p>
   </section>
   <section id="main-section" class="section hidden">
     <div class="user-card"><div class="user-avatar" id="user-avatar">?</div><div class="user-info"><p class="user-name" id="user-name">Loading...</p><p class="user-email" id="user-email">-</p></div><button class="btn btn-ghost btn-icon" id="logout-btn" title="Sign Out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></button></div>
@@ -630,9 +610,9 @@ const popupHtml = `<!DOCTYPE html>
 <script src="popup.js"></script>
 </body></html>`;
 
-const popupCss = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;background:linear-gradient(180deg,#f5f5f7,#fff);color:#1d1d1f;width:340px;min-height:400px}.popup-container{display:flex;flex-direction:column;min-height:400px}.header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:rgba(255,255,255,.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,.06)}.logo{display:flex;align-items:center;gap:10px}.logo-icon{width:32px;height:32px}.logo-text h1{font-size:16px;font-weight:600;color:#1d1d1f}.logo-text .version{font-size:11px;color:#86868b}.status-badge{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:500;background:rgba(0,0,0,.04);color:#86868b}.status-badge.active{background:rgba(52,199,89,.12);color:#248a3d}.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}.section{padding:20px;flex:1}.hidden{display:none!important}.login-section{display:flex;flex-direction:column;justify-content:center}.login-header{text-align:center;margin-bottom:24px}.login-header h2{font-size:22px;font-weight:600}.login-header p{font-size:14px;color:#86868b}.login-form{display:flex;flex-direction:column;gap:16px}.form-group{display:flex;flex-direction:column;gap:6px}.form-group label{font-size:13px;font-weight:500}.form-group input{padding:12px 14px;border:1px solid rgba(0,0,0,.1);border-radius:10px;font-size:15px;background:rgba(255,255,255,.8)}.form-group input:focus{outline:none;border-color:#0071e3;box-shadow:0 0 0 3px rgba(0,113,227,.15)}.error-message{padding:10px 12px;background:rgba(255,59,48,.1);border-radius:8px;color:#d70015;font-size:13px;margin-top:12px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;transition:all .2s}.btn-primary{background:#0071e3;color:#fff}.btn-primary:hover{background:#0077ed}.btn-microsoft{background:#2f2f2f;color:#fff}.btn-microsoft:hover{background:#404040}.btn-microsoft:disabled{opacity:.7;cursor:not-allowed}.microsoft-icon{flex-shrink:0}.btn-ghost{background:transparent;color:#86868b;padding:8px}.btn-ghost:hover{background:rgba(0,0,0,.04)}.btn-block{width:100%}.btn-loader{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.login-divider{display:flex;align-items:center;text-align:center;margin:20px 0}.login-divider::before,.login-divider::after{content:'';flex:1;border-bottom:1px solid rgba(0,0,0,.1)}.login-divider span{padding:0 12px;font-size:12px;color:#86868b}.user-card{display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px;margin-bottom:16px}.user-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#0071e3,#5856d6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#fff}.user-info{flex:1;min-width:0}.user-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.user-email{font-size:12px;color:#86868b}.toggle-card{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px;margin-bottom:16px}.toggle-info{display:flex;flex-direction:column;gap:2px}.toggle-label{font-size:14px;font-weight:500}.toggle-status{font-size:12px;color:#248a3d}.toggle-switch{position:relative;width:50px;height:30px}.toggle-switch input{opacity:0;width:0;height:0}.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.12);border-radius:30px;transition:all .3s}.toggle-slider::before{position:absolute;content:'';height:26px;width:26px;left:2px;bottom:2px;background:#fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:all .3s}input:checked+.toggle-slider{background:#34c759}input:checked+.toggle-slider::before{transform:translateX(20px)}.brand-section{margin-bottom:16px}.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.section-header h3{font-size:13px;font-weight:600;color:#86868b;text-transform:uppercase}.brand-select-wrapper{position:relative}.brand-select{width:100%;padding:12px 40px 12px 14px;border:1px solid rgba(0,0,0,.1);border-radius:10px;font-size:15px;background:rgba(255,255,255,.8);appearance:none;cursor:pointer}.brand-select:focus{outline:none;border-color:#0071e3}.brand-select-wrapper::after{content:'';position:absolute;right:14px;top:50%;transform:translateY(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #86868b;pointer-events:none}.brand-hint{font-size:12px;color:#86868b;margin-top:8px}.stats-section{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stat-card{display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px}.stat-value{font-size:24px;font-weight:600}.stat-label{font-size:12px;color:#86868b;margin-top:4px}.footer{padding:14px 20px;background:rgba(255,255,255,.6);border-top:1px solid rgba(0,0,0,.06)}.footer-link{display:flex;align-items:center;justify-content:center;gap:6px;color:#0071e3;text-decoration:none;font-size:13px;font-weight:500}`;
+const popupCss = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;background:linear-gradient(180deg,#f5f5f7,#fff);color:#1d1d1f;width:340px;min-height:400px}.popup-container{display:flex;flex-direction:column;min-height:400px}.header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:rgba(255,255,255,.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,.06)}.logo{display:flex;align-items:center;gap:10px}.logo-icon{width:32px;height:32px}.logo-text h1{font-size:16px;font-weight:600;color:#1d1d1f}.logo-text .version{font-size:11px;color:#86868b}.status-badge{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:500;background:rgba(0,0,0,.04);color:#86868b}.status-badge.active{background:rgba(52,199,89,.12);color:#248a3d}.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}.section{padding:20px;flex:1}.hidden{display:none!important}.login-section{display:flex;flex-direction:column;justify-content:center}.login-header{text-align:center;margin-bottom:24px}.login-header h2{font-size:22px;font-weight:600}.login-header p{font-size:14px;color:#86868b}.domain-hint{text-align:center;font-size:12px;color:#86868b;margin-top:16px}.error-message{padding:10px 12px;background:rgba(255,59,48,.1);border-radius:8px;color:#d70015;font-size:13px;margin-top:12px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;transition:all .2s}.btn-microsoft{background:#2f2f2f;color:#fff}.btn-microsoft:hover{background:#404040}.btn-microsoft:disabled{opacity:.7;cursor:not-allowed}.microsoft-icon{flex-shrink:0}.btn-ghost{background:transparent;color:#86868b;padding:8px}.btn-ghost:hover{background:rgba(0,0,0,.04)}.btn-block{width:100%}.btn-loader{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.user-card{display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px;margin-bottom:16px}.user-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#0071e3,#5856d6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#fff}.user-info{flex:1;min-width:0}.user-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.user-email{font-size:12px;color:#86868b}.toggle-card{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px;margin-bottom:16px}.toggle-info{display:flex;flex-direction:column;gap:2px}.toggle-label{font-size:14px;font-weight:500}.toggle-status{font-size:12px;color:#248a3d}.toggle-switch{position:relative;width:50px;height:30px}.toggle-switch input{opacity:0;width:0;height:0}.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.12);border-radius:30px;transition:all .3s}.toggle-slider::before{position:absolute;content:'';height:26px;width:26px;left:2px;bottom:2px;background:#fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:all .3s}input:checked+.toggle-slider{background:#34c759}input:checked+.toggle-slider::before{transform:translateX(20px)}.brand-section{margin-bottom:16px}.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.section-header h3{font-size:13px;font-weight:600;color:#86868b;text-transform:uppercase}.brand-select-wrapper{position:relative}.brand-select{width:100%;padding:12px 40px 12px 14px;border:1px solid rgba(0,0,0,.1);border-radius:10px;font-size:15px;background:rgba(255,255,255,.8);appearance:none;cursor:pointer}.brand-select:focus{outline:none;border-color:#0071e3}.brand-select-wrapper::after{content:'';position:absolute;right:14px;top:50%;transform:translateY(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #86868b;pointer-events:none}.brand-hint{font-size:12px;color:#86868b;margin-top:8px}.stats-section{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stat-card{display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.06);border-radius:14px}.stat-value{font-size:24px;font-weight:600}.stat-label{font-size:12px;color:#86868b;margin-top:4px}.footer{padding:14px 20px;background:rgba(255,255,255,.6);border-top:1px solid rgba(0,0,0,.06)}.footer-link{display:flex;align-items:center;justify-content:center;gap:6px;color:#0071e3;text-decoration:none;font-size:13px;font-weight:500}`;
 
-const popupJs = `const loginSection=document.getElementById('login-section'),mainSection=document.getElementById('main-section'),loginForm=document.getElementById('login-form'),loginError=document.getElementById('login-error'),loginBtn=document.getElementById('login-btn'),microsoftLoginBtn=document.getElementById('microsoft-login-btn'),logoutBtn=document.getElementById('logout-btn'),enableToggle=document.getElementById('enable-toggle'),toggleStatus=document.getElementById('toggle-status'),statusBadge=document.getElementById('status-badge'),brandSelect=document.getElementById('brand-select'),brandHint=document.getElementById('brand-hint'),refreshBrandsBtn=document.getElementById('refresh-brands'),userName=document.getElementById('user-name'),userEmail=document.getElementById('user-email'),userAvatar=document.getElementById('user-avatar'),brandsCount=document.getElementById('brands-count'),termsCount=document.getElementById('terms-count');let state={isEnabled:true,isAuthenticated:false,currentBrand:null,brands:[],userProfile:null};
+const popupJs = `const loginSection=document.getElementById('login-section'),mainSection=document.getElementById('main-section'),loginError=document.getElementById('login-error'),microsoftLoginBtn=document.getElementById('microsoft-login-btn'),logoutBtn=document.getElementById('logout-btn'),enableToggle=document.getElementById('enable-toggle'),toggleStatus=document.getElementById('toggle-status'),statusBadge=document.getElementById('status-badge'),brandSelect=document.getElementById('brand-select'),brandHint=document.getElementById('brand-hint'),refreshBrandsBtn=document.getElementById('refresh-brands'),userName=document.getElementById('user-name'),userEmail=document.getElementById('user-email'),userAvatar=document.getElementById('user-avatar'),brandsCount=document.getElementById('brands-count'),termsCount=document.getElementById('terms-count');let state={isEnabled:true,isAuthenticated:false,currentBrand:null,brands:[],userProfile:null};
 
 async function init(){try{state=await chrome.runtime.sendMessage({type:'GET_STATE'});render()}catch(e){console.error(e)}}
 
@@ -646,8 +626,6 @@ function updateStatus(){const t=statusBadge.querySelector('.status-text');if(!st
 
 microsoftLoginBtn.addEventListener('click',async()=>{microsoftLoginBtn.disabled=true;microsoftLoginBtn.querySelector('.btn-text').textContent='Signing in...';microsoftLoginBtn.querySelector('.btn-loader').classList.remove('hidden');loginError.classList.add('hidden');try{const r=await chrome.runtime.sendMessage({type:'MICROSOFT_LOGIN'});if(r.success){state.isAuthenticated=true;state.userProfile=r.user;state=await chrome.runtime.sendMessage({type:'GET_STATE'});render()}else{loginError.textContent=r.error||'Microsoft login failed';loginError.classList.remove('hidden')}}catch(e){loginError.textContent='An error occurred. Please try again.';loginError.classList.remove('hidden')}finally{microsoftLoginBtn.disabled=false;microsoftLoginBtn.querySelector('.btn-text').textContent='Sign in with Microsoft';microsoftLoginBtn.querySelector('.btn-loader').classList.add('hidden')}});
 
-loginForm.addEventListener('submit',async e=>{e.preventDefault();const email=document.getElementById('email').value,password=document.getElementById('password').value;loginBtn.disabled=true;loginBtn.querySelector('.btn-text').textContent='Signing in...';loginBtn.querySelector('.btn-loader').classList.remove('hidden');loginError.classList.add('hidden');try{const r=await chrome.runtime.sendMessage({type:'LOGIN',email,password});if(r.success){state.isAuthenticated=true;state.userProfile=r.user;state=await chrome.runtime.sendMessage({type:'GET_STATE'});render()}else{loginError.textContent=r.error||'Login failed';loginError.classList.remove('hidden')}}finally{loginBtn.disabled=false;loginBtn.querySelector('.btn-text').textContent='Sign In';loginBtn.querySelector('.btn-loader').classList.add('hidden')}});
-
 logoutBtn.addEventListener('click',async()=>{await chrome.runtime.sendMessage({type:'LOGOUT'});state.isAuthenticated=false;state.userProfile=null;render()});
 
 enableToggle.addEventListener('change',async()=>{await chrome.runtime.sendMessage({type:'SET_ENABLED',enabled:enableToggle.checked});state.isEnabled=enableToggle.checked;toggleStatus.textContent=state.isEnabled?'Enabled':'Disabled';updateStatus()});
@@ -658,7 +636,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.3
+const readmeMd = `# BizGuard Extension v5.4
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -682,7 +660,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.3...');
+    console.log('Generating extension ZIP v5.4...');
     
     const zip = new JSZip();
     
@@ -711,7 +689,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.3.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.4.zip"',
       },
     });
   } catch (error: unknown) {
