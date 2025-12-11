@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
+import { sanitizeDbError } from '@/lib/errorUtils';
 
 interface Brand {
   id: string;
@@ -74,14 +75,25 @@ export default function Brands() {
   };
 
   const createBrand = async () => {
-    if (!newBrandName.trim()) return;
+    const trimmedName = newBrandName.trim();
+    if (!trimmedName) return;
 
-    const slug = newBrandName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    // Input validation
+    if (trimmedName.length > 100) {
+      toast({
+        title: 'Error',
+        description: 'Brand name must be 100 characters or less',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const slug = trimmedName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     
     try {
       const { data, error } = await supabase
         .from('brands')
-        .insert({ name: newBrandName.trim(), slug })
+        .insert({ name: trimmedName, slug })
         .select()
         .single();
 
@@ -94,41 +106,52 @@ export default function Brands() {
       setIsCreating(false);
       toast({
         title: 'Brand created',
-        description: `${newBrandName} has been created`,
+        description: `${trimmedName} has been created`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create brand',
+        description: sanitizeDbError(error, 'Failed to create brand'),
         variant: 'destructive',
       });
     }
   };
 
   const updateBrandName = async () => {
-    if (!selectedBrand || !editingName.trim() || editingName === selectedBrand.name) return;
+    const trimmedName = editingName.trim();
+    if (!selectedBrand || !trimmedName || trimmedName === selectedBrand.name) return;
 
-    const newSlug = editingName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    // Input validation
+    if (trimmedName.length > 100) {
+      toast({
+        title: 'Error',
+        description: 'Brand name must be 100 characters or less',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const newSlug = trimmedName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     
     try {
       const { error } = await supabase
         .from('brands')
-        .update({ name: editingName.trim(), slug: newSlug })
+        .update({ name: trimmedName, slug: newSlug })
         .eq('id', selectedBrand.id);
 
       if (error) throw error;
 
-      const updatedBrand = { ...selectedBrand, name: editingName.trim(), slug: newSlug };
+      const updatedBrand = { ...selectedBrand, name: trimmedName, slug: newSlug };
       setSelectedBrand(updatedBrand);
       setBrands(brands.map(b => b.id === selectedBrand.id ? updatedBrand : b));
       toast({
         title: 'Brand updated',
         description: 'Brand name has been updated',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update brand',
+        description: sanitizeDbError(error, 'Failed to update brand'),
         variant: 'destructive',
       });
     }
@@ -186,12 +209,36 @@ export default function Brands() {
   };
 
   const addTerm = async () => {
-    if (!selectedBrand || !newTerm.trim()) return;
+    if (!selectedBrand) return;
+    
+    const trimmedTerm = newTerm.trim().toLowerCase();
+    if (!trimmedTerm) return;
+
+    // Input validation
+    if (trimmedTerm.length > 200) {
+      toast({
+        title: 'Error',
+        description: 'Term must be 200 characters or less',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check for duplicate before inserting
+    const existingTerm = selectedBrand.terms.find(t => t.term === trimmedTerm);
+    if (existingTerm) {
+      toast({
+        title: 'Error',
+        description: 'This term already exists for this brand',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('brand_terms')
-        .insert({ brand_id: selectedBrand.id, term: newTerm.trim().toLowerCase() })
+        .insert({ brand_id: selectedBrand.id, term: trimmedTerm })
         .select()
         .single();
 
@@ -206,12 +253,12 @@ export default function Brands() {
       setNewTerm('');
       toast({
         title: 'Term added',
-        description: `"${newTerm}" added to ${selectedBrand.name}`,
+        description: `"${trimmedTerm}" added to ${selectedBrand.name}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to add term',
+        description: sanitizeDbError(error, 'Failed to add term'),
         variant: 'destructive',
       });
     }

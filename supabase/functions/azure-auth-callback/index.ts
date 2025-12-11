@@ -31,7 +31,7 @@ serve(async (req) => {
     
     console.log('Callback received:', { 
       hasCode: !!code, 
-      redirectUri,
+      hasRedirectUri: !!redirectUri,
       codeLength: code?.length,
       hasPkce: !!codeVerifier
     });
@@ -39,6 +39,49 @@ serve(async (req) => {
     if (!code) {
       console.error('No authorization code provided in request');
       return new Response(JSON.stringify({ error: 'No authorization code provided' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate redirectUri to prevent open redirect attacks
+    const ALLOWED_ORIGINS = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:8080',
+      Deno.env.get('SUPABASE_URL'),
+    ].filter(Boolean) as string[];
+
+    // Also allow *.lovableproject.com and *.lovable.app for Lovable deployments
+    const ALLOWED_PATTERNS = [
+      /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
+      /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
+    ];
+
+    let validatedBaseUrl: string;
+    try {
+      const redirectUrl = new URL(redirectUri);
+      const isAllowedOrigin = ALLOWED_ORIGINS.some(origin => {
+        try {
+          return new URL(origin).origin === redirectUrl.origin;
+        } catch {
+          return false;
+        }
+      });
+      const isAllowedPattern = ALLOWED_PATTERNS.some(pattern => pattern.test(redirectUrl.origin));
+      
+      if (!isAllowedOrigin && !isAllowedPattern) {
+        console.error('Invalid redirect URI origin:', redirectUrl.origin);
+        return new Response(JSON.stringify({ error: 'Invalid redirect URI' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      validatedBaseUrl = redirectUrl.origin;
+    } catch (e) {
+      console.error('Invalid redirect URI format:', redirectUri);
+      return new Response(JSON.stringify({ error: 'Invalid redirect URI format' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -197,9 +240,8 @@ serve(async (req) => {
     }
 
     // Generate a magic link / session for the user
-    // Extract base URL and redirect to dashboard
-    const baseUrl = redirectUri.replace(/\/auth.*$/, '');
-    const dashboardUrl = `${baseUrl}/dashboard`;
+    // Use validated base URL to prevent open redirect
+    const dashboardUrl = `${validatedBaseUrl}/dashboard`;
     console.log('Generating magic link with redirect to:', dashboardUrl);
     
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
