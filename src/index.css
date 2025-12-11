@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* BWBlock v5 - Apple-Style Design System */
+/* BizGuard v5 - Apple-Style Design System */
 
 @layer base {
   :root {
@@ -37,7 +37,7 @@
 
     --radius: 1rem;
 
-    /* Custom BWBlock tokens */
+    /* Custom BizGuard tokens */
     --glass: 222 47% 12%;
     --glass-border: 217 33% 22%;
     --glass-highlight: 0 0% 100%;

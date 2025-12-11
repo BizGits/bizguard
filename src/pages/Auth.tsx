@@ -67,7 +67,7 @@ export default function Auth() {
     setIsDevSigningIn(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: 'dev@bwblock.local',
+        email: 'dev@bizguard.local',
         password: DEV_CODE,
       });
 
@@ -75,7 +75,7 @@ export default function Auth() {
         // If user doesn't exist, create them
         if (error.message.includes('Invalid login credentials')) {
           const { error: signUpError } = await supabase.auth.signUp({
-            email: 'dev@bwblock.local',
+            email: 'dev@bizguard.local',
             password: DEV_CODE,
             options: {
               data: {
@@ -133,7 +133,7 @@ export default function Auth() {
 
       <Card variant="glass" className="w-full max-w-md animate-scale-in relative z-10">
         <CardHeader className="text-center pb-2">
-          <img src={logo} alt="BWBlock" className="mx-auto w-20 h-20 object-contain mb-4" />
+          <img src={logo} alt="BizGuard" className="mx-auto w-20 h-20 object-contain mb-4" />
           <CardTitle className="text-2xl">Welcome to BizGuard!</CardTitle>
           <CardDescription className="text-muted-foreground">
             Brand protection for your team

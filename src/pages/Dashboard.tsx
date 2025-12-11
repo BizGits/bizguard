@@ -127,7 +127,7 @@ export default function Dashboard() {
         {/* Page header */}
         <div>
           <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Overview of BWBlock activity</p>
+          <p className="text-muted-foreground mt-1">Overview of BizGuard activity</p>
         </div>
 
         {/* Stats grid */}
