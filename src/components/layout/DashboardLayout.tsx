@@ -11,7 +11,8 @@ import {
   Activity,
   Settings,
   FileBarChart,
-  Puzzle
+  Puzzle,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { label: 'Events', href: '/dashboard/events', icon: <Activity className="w-5 h-5" /> },
   { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" /> },
   { label: 'Brands', href: '/dashboard/brands', icon: <Tags className="w-5 h-5" /> },
+  { label: 'Invitations', href: '/dashboard/invitations', icon: <UserPlus className="w-5 h-5" />, adminOnly: true },
   { label: 'Extensions', href: '/dashboard/extensions', icon: <Puzzle className="w-5 h-5" /> },
   { label: 'Reports', href: '/dashboard/reports', icon: <FileBarChart className="w-5 h-5" /> },
   { label: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-5 h-5" /> },

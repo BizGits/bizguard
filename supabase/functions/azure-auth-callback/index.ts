@@ -105,6 +105,34 @@ serve(async (req) => {
       },
     });
 
+    // Check if user is invited (dashboard requires invitation)
+    const { data: invitation, error: inviteError } = await supabase
+      .from('invitations')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (inviteError) {
+      console.error('Error checking invitation:', inviteError);
+      return new Response(JSON.stringify({ error: 'Failed to check invitation status' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!invitation) {
+      console.log('User not invited:', email);
+      return new Response(JSON.stringify({ 
+        error: 'not_invited',
+        message: 'You have not been invited to access the dashboard. Please contact an administrator.'
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('User invitation found:', email);
+
     // Check if user exists by email
     const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
     
@@ -145,6 +173,12 @@ serve(async (req) => {
 
       userId = newUser.user.id;
       console.log('New user created:', userId);
+
+      // Mark invitation as used
+      await supabase
+        .from('invitations')
+        .update({ used_at: new Date().toISOString() })
+        .eq('email', email.toLowerCase());
     }
 
     // Generate a magic link / session for the user
