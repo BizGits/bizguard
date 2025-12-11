@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
+import { sanitizeDbError } from '@/lib/errorUtils';
 
 interface Invitation {
   id: string;
@@ -77,14 +78,19 @@ export default function Invitations() {
         });
 
       if (error) {
-        if (error.code === '23505') { // Unique constraint violation
+        // Handle specific known error - duplicate invitation
+        if (error.code === '23505') {
           toast({
             title: 'Already invited',
             description: 'This email has already been invited',
             variant: 'destructive',
           });
         } else {
-          throw error;
+          toast({
+            title: 'Error',
+            description: sanitizeDbError(error, 'Failed to send invitation'),
+            variant: 'destructive',
+          });
         }
         return;
       }
@@ -97,10 +103,9 @@ export default function Invitations() {
       setNewEmail('');
       fetchInvitations();
     } catch (error) {
-      console.error('Error sending invitation:', error);
       toast({
         title: 'Error',
-        description: 'Failed to send invitation',
+        description: sanitizeDbError(error, 'Failed to send invitation'),
         variant: 'destructive',
       });
     } finally {
