@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.brands]
 verify_jwt = false
+
+[functions.extension-download]
+verify_jwt = false

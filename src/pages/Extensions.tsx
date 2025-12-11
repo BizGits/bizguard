@@ -16,20 +16,19 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 const EXTENSION_VERSION = '5.0.0';
+const DOWNLOAD_URL = 'https://livbbxegwifbhtboyczy.supabase.co/functions/v1/extension-download';
 
 export default function Extensions() {
   const [currentStep, setCurrentStep] = useState(0);
   const [downloaded, setDownloaded] = useState(false);
 
   const handleDownload = () => {
-    // Create a blob with extension files info
-    // In production, this would be a real ZIP file hosted somewhere
-    const extensionUrl = '/extension.zip'; // You'd host this file
+    // Trigger download from edge function
+    window.open(DOWNLOAD_URL, '_blank');
     
-    // For now, show instructions since we can't actually serve the ZIP from the preview
     toast({
-      title: 'Extension Ready',
-      description: 'Follow the steps below to complete installation',
+      title: 'Download Started',
+      description: 'Extract the ZIP and follow the steps below',
     });
     
     setDownloaded(true);
