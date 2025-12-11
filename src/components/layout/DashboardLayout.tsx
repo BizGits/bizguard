@@ -1,8 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
-  Shield, 
+  Tags, 
   Users, 
   LogOut, 
   Menu,
@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import logo from '@/assets/logo.png';
 
 interface NavItem {
   label: string;
@@ -23,7 +23,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-  { label: 'Brands', href: '/dashboard/brands', icon: <Shield className="w-5 h-5" />, adminOnly: true },
+  { label: 'Brands', href: '/dashboard/brands', icon: <Tags className="w-5 h-5" />, adminOnly: true },
   { label: 'Users', href: '/dashboard/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
 ];
 
@@ -62,9 +62,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="p-6 border-b border-glass-border/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
-                  <Shield className="w-5 h-5 text-primary-foreground" />
-                </div>
+                <img src={logo} alt="BWBlock" className="w-10 h-10 object-contain" />
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">BWBlock</h1>
                   <p className="text-xs text-muted-foreground">v5 Dashboard</p>
@@ -157,9 +155,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-                <Shield className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src={logo} alt="BWBlock" className="w-8 h-8 object-contain" />
               <span className="font-semibold">BWBlock</span>
             </div>
             <div className="w-10" /> {/* Spacer */}
