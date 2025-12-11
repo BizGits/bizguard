@@ -14,6 +14,12 @@ serve(async (req) => {
     const clientId = Deno.env.get('AZURE_AD_CLIENT_ID');
     const tenantId = Deno.env.get('AZURE_AD_TENANT_ID');
     
+    console.log('Azure AD Config:', { 
+      clientId: clientId?.substring(0, 8) + '...', 
+      tenantId: tenantId?.substring(0, 8) + '...',
+      tenantIdFull: tenantId // Log full tenant to debug
+    });
+    
     if (!clientId || !tenantId) {
       console.error('Missing Azure AD configuration');
       return new Response(JSON.stringify({ error: 'Azure AD not configured' }), {
