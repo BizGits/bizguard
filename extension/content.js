@@ -89,26 +89,53 @@ function showWarning(term, brandName, element) {
   const existingWarning = element.querySelector('.bizguard-warning');
   if (existingWarning) return;
   
-  // Create warning element
+  // Create warning element using safe DOM manipulation (prevents XSS)
   const warning = document.createElement('div');
   warning.className = 'bizguard-warning';
-  warning.innerHTML = `
-    <div class="bizguard-warning-content">
-      <div class="bizguard-warning-icon">⚠️</div>
-      <div class="bizguard-warning-text">
-        <strong>Brand Mismatch Detected!</strong>
-        <p>You're typing a term from <strong>${brandName}</strong> while working on <strong>${currentBrand.name}</strong></p>
-        <p class="bizguard-term">Term: "${term}"</p>
-      </div>
-      <button class="bizguard-dismiss">Dismiss</button>
-    </div>
-  `;
   
-  // Add dismiss handler
-  warning.querySelector('.bizguard-dismiss').addEventListener('click', (e) => {
+  const content = document.createElement('div');
+  content.className = 'bizguard-warning-content';
+  
+  const icon = document.createElement('div');
+  icon.className = 'bizguard-warning-icon';
+  icon.textContent = '⚠️';
+  
+  const textDiv = document.createElement('div');
+  textDiv.className = 'bizguard-warning-text';
+  
+  const title = document.createElement('strong');
+  title.textContent = 'Brand Mismatch Detected!';
+  
+  const message = document.createElement('p');
+  message.textContent = 'You\'re typing a term from ';
+  const brandNameStrong = document.createElement('strong');
+  brandNameStrong.textContent = brandName;
+  message.appendChild(brandNameStrong);
+  message.appendChild(document.createTextNode(' while working on '));
+  const currentBrandStrong = document.createElement('strong');
+  currentBrandStrong.textContent = currentBrand.name;
+  message.appendChild(currentBrandStrong);
+  
+  const termP = document.createElement('p');
+  termP.className = 'bizguard-term';
+  termP.textContent = `Term: "${term}"`;
+  
+  textDiv.appendChild(title);
+  textDiv.appendChild(message);
+  textDiv.appendChild(termP);
+  
+  const dismissBtn = document.createElement('button');
+  dismissBtn.className = 'bizguard-dismiss';
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     warning.remove();
   });
+  
+  content.appendChild(icon);
+  content.appendChild(textDiv);
+  content.appendChild(dismissBtn);
+  warning.appendChild(content);
   
   // Position relative to element
   element.style.position = element.style.position || 'relative';
