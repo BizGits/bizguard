@@ -42,17 +42,17 @@ const manifestJson = `{
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16.svg",
+      "32": "icons/icon32.svg",
+      "48": "icons/icon48.svg",
+      "128": "icons/icon128.svg"
     }
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/icon16.svg",
+    "32": "icons/icon32.svg",
+    "48": "icons/icon48.svg",
+    "128": "icons/icon128.svg"
   }
 }`;
 
@@ -437,7 +437,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.1</span></div></div>
+    <div class="logo"><img src="icons/icon48.svg" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.1</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -515,23 +515,38 @@ const readmeMd = `# BizGuard Extension v5.1
 ## Login
 Sign in with your Microsoft account or use email/password.`;
 
-// SVG icon generator
+// SVG icon generator - BizGuard padlock with flower pattern
 const createSvgIcon = (size: number): string => {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#818cf8"/>
-      <stop offset="50%" stop-color="#8b5cf6"/>
-      <stop offset="100%" stop-color="#a855f7"/>
+    <linearGradient id="padlock" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="50%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
     </linearGradient>
-    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c7d2fe"/>
-      <stop offset="100%" stop-color="#ddd6fe"/>
+    <linearGradient id="shackle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <path d="M64 24c-20 0-36 8-36 8v36c0 24 36 40 36 40s36-16 36-40V32s-16-8-36-8z" fill="url(#shield)" opacity="0.9"/>
-  <path d="M56 64l8 8 16-16" stroke="#6366f1" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Shackle (top loop) -->
+  <path d="M44 48 L44 36 C44 22 52 14 64 14 C76 14 84 22 84 36 L84 48" 
+        fill="none" stroke="url(#shackle)" stroke-width="12" stroke-linecap="round"/>
+  <!-- Body (circle) -->
+  <circle cx="64" cy="76" r="38" fill="url(#padlock)"/>
+  <!-- Flower pattern (8 petals) -->
+  <g fill="white" opacity="0.95">
+    <ellipse cx="64" cy="60" rx="5" ry="12"/>
+    <ellipse cx="64" cy="92" rx="5" ry="12"/>
+    <ellipse cx="48" cy="76" rx="12" ry="5"/>
+    <ellipse cx="80" cy="76" rx="12" ry="5"/>
+    <ellipse cx="52.7" cy="64.7" rx="5" ry="12" transform="rotate(45 52.7 64.7)"/>
+    <ellipse cx="75.3" cy="87.3" rx="5" ry="12" transform="rotate(45 75.3 87.3)"/>
+    <ellipse cx="75.3" cy="64.7" rx="5" ry="12" transform="rotate(-45 75.3 64.7)"/>
+    <ellipse cx="52.7" cy="87.3" rx="5" ry="12" transform="rotate(-45 52.7 87.3)"/>
+  </g>
+  <!-- Center circle -->
+  <circle cx="64" cy="76" r="6" fill="white"/>
 </svg>`;
 };
 
@@ -555,10 +570,9 @@ serve(async (req) => {
     zip.addFile('popup.js', popupJs);
     zip.addFile('README.md', readmeMd);
     
-    // Add SVG icons (work in modern browsers)
+    // Add SVG icons
     const iconSizes = [16, 32, 48, 128];
     for (const size of iconSizes) {
-      zip.addFile(`icons/icon${size}.png`, createSvgIcon(size));
       zip.addFile(`icons/icon${size}.svg`, createSvgIcon(size));
     }
     
