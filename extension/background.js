@@ -298,6 +298,12 @@ async function handleLogin(email, password) {
 // Handle Microsoft/Azure AD login
 async function handleMicrosoftLogin() {
   try {
+    // Generate PKCE code verifier and challenge
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    console.log('Starting Microsoft login with PKCE');
+    
     // Get Azure auth URL from our edge function
     const initResponse = await fetch(`${API_BASE}/azure-auth-init`, {
       method: 'POST',
@@ -305,15 +311,19 @@ async function handleMicrosoftLogin() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        redirectUri: chrome.identity.getRedirectURL()
+        redirectUri: chrome.identity.getRedirectURL(),
+        codeChallenge: codeChallenge
       })
     });
 
     if (!initResponse.ok) {
+      const errorData = await initResponse.text();
+      console.error('Failed to initialize Azure login:', errorData);
       throw new Error('Failed to initialize Azure login');
     }
 
-    const { authUrl } = await initResponse.json();
+    const { authUrl, state } = await initResponse.json();
+    console.log('Got auth URL, launching web auth flow');
 
     // Launch OAuth flow
     const responseUrl = await new Promise((resolve, reject) => {
@@ -332,6 +342,8 @@ async function handleMicrosoftLogin() {
       );
     });
 
+    console.log('Web auth flow completed');
+
     // Extract authorization code from redirect URL
     const url = new URL(responseUrl);
     const code = url.searchParams.get('code');
@@ -345,7 +357,9 @@ async function handleMicrosoftLogin() {
       throw new Error('No authorization code received');
     }
 
-    // Exchange code for session via our edge function
+    console.log('Got authorization code, exchanging for session');
+
+    // Exchange code for session via our edge function with PKCE verifier
     const callbackResponse = await fetch(`${API_BASE}/azure-auth-callback`, {
       method: 'POST',
       headers: {
@@ -353,72 +367,84 @@ async function handleMicrosoftLogin() {
       },
       body: JSON.stringify({
         code,
-        redirectUri: chrome.identity.getRedirectURL()
+        redirectUri: chrome.identity.getRedirectURL(),
+        codeVerifier: codeVerifier
       })
     });
 
     const callbackData = await callbackResponse.json();
 
     if (!callbackResponse.ok || callbackData.error) {
+      console.error('Callback error:', callbackData);
       throw new Error(callbackData.message || callbackData.error || 'Authentication failed');
     }
 
-    if (!callbackData.magicLink) {
-      throw new Error('No session token received');
+    console.log('Got callback response:', { hasEmail: !!callbackData.email, hasMagicLink: !!callbackData.magicLink });
+
+    // Extract access token from magic link
+    if (callbackData.magicLink) {
+      const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
+      
+      if (access_token && user) {
+        authToken = access_token;
+        userProfile = {
+          id: user.id,
+          email: user.email,
+          displayName: user.user_metadata?.full_name || user.email
+        };
+      } else {
+        // Fallback: use user info from callback directly
+        console.log('Magic link verification failed, using callback data');
+        userProfile = {
+          id: callbackData.userId,
+          email: callbackData.email,
+          displayName: callbackData.displayName || callbackData.email.split('@')[0]
+        };
+        // We need an auth token - try to sign in with magic link approach
+        authToken = null;
+      }
+    } else {
+      throw new Error('No session data received from server');
     }
 
-    // Use the magic link to get a session
-    // Extract token from magic link and verify it
-    const magicUrl = new URL(callbackData.magicLink);
-    const tokenHash = magicUrl.searchParams.get('token_hash') || magicUrl.hash.replace('#', '').split('&').find(p => p.startsWith('access_token='))?.split('=')[1];
-    
-    // Verify the token with Supabase
-    const verifyResponse = await fetch(`${callbackData.magicLink}`);
-    
-    // After redirect, get the session from Supabase
-    const sessionResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY
-      },
-      body: JSON.stringify({
-        auth_code: code
-      })
-    });
-
-    // Alternative: Use the user info directly from callback
-    authToken = callbackData.magicLink; // Temporary - we'll refresh this
-    userProfile = {
-      id: callbackData.userId,
-      email: callbackData.email,
-      displayName: callbackData.email.split('@')[0]
-    };
-
-    // Try to get a proper session by following the magic link flow
-    // For now, we'll sign in with the OTP approach
-    const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
-    
-    if (access_token) {
-      authToken = access_token;
-      userProfile = {
-        id: user.id,
-        email: user.email,
-        displayName: user.user_metadata?.full_name || user.email
-      };
+    if (!authToken) {
+      console.warn('No access token obtained, session may be limited');
     }
 
     await saveState();
-    await updateExtensionStatus(isEnabled);
-    await logEvent('LOGIN');
+    if (authToken) {
+      await updateExtensionStatus(isEnabled);
+      await logEvent('LOGIN');
+    }
 
-    console.log('Microsoft login successful:', userProfile.email);
+    console.log('Microsoft login successful:', userProfile?.email);
 
     return { success: true, user: userProfile };
   } catch (error) {
     console.error('Microsoft login error:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Generate PKCE code verifier (random 43-128 character string)
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+}
+
+// Generate PKCE code challenge from verifier (SHA256 hash, base64url encoded)
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+// Base64url encode
+function base64UrlEncode(buffer) {
+  const base64 = btoa(String.fromCharCode(...buffer));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // Verify magic link and get session

@@ -52,13 +52,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL'),
     ].filter(Boolean) as string[];
 
-    // Also allow *.lovableproject.com and *.lovable.app for Lovable deployments
+    // Also allow *.lovableproject.com, *.lovable.app, and Chrome extension URLs
     const ALLOWED_PATTERNS = [
       /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
       /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
+      /^https:\/\/[a-z0-9]+\.chromiumapp\.org$/, // Chrome extension redirect
     ];
 
     let validatedBaseUrl: string;
+    let isExtensionAuth = false;
     try {
       const redirectUrl = new URL(redirectUri);
       const isAllowedOrigin = ALLOWED_ORIGINS.some(origin => {
@@ -69,6 +71,9 @@ serve(async (req) => {
         }
       });
       const isAllowedPattern = ALLOWED_PATTERNS.some(pattern => pattern.test(redirectUrl.origin));
+      
+      // Check if this is a Chrome extension auth request
+      isExtensionAuth = /\.chromiumapp\.org$/.test(redirectUrl.origin);
       
       if (!isAllowedOrigin && !isAllowedPattern) {
         console.error('Invalid redirect URI origin:', redirectUrl.origin);
@@ -86,6 +91,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('Auth type:', isExtensionAuth ? 'extension' : 'web');
 
     console.log('Exchanging code for tokens...');
 
@@ -160,33 +167,40 @@ serve(async (req) => {
       },
     });
 
-    // Check if user is invited (dashboard requires invitation)
-    const { data: invitation, error: inviteError } = await supabase
-      .from('invitations')
-      .select('*')
-      .eq('email', email.toLowerCase())
-      .maybeSingle();
+    // Check if user is invited (dashboard requires invitation, extension does not)
+    if (!isExtensionAuth) {
+      const { data: invitation, error: inviteError } = await supabase
+        .from('invitations')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .maybeSingle();
 
-    if (inviteError) {
-      console.error('Error checking invitation:', inviteError);
-      return new Response(JSON.stringify({ error: 'Failed to check invitation status' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (inviteError) {
+        console.error('Error checking invitation:', inviteError);
+        return new Response(JSON.stringify({ error: 'Failed to check invitation status' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!invitation) {
+        console.log('User not invited:', email);
+        return new Response(JSON.stringify({ 
+          error: 'not_invited',
+          message: 'You have not been invited to access the dashboard. Please contact an administrator.'
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log('User invitation found:', email);
+
+      // Mark invitation as used later after user creation
+      var invitationToMark = invitation;
+    } else {
+      console.log('Extension auth - skipping invitation check');
     }
-
-    if (!invitation) {
-      console.log('User not invited:', email);
-      return new Response(JSON.stringify({ 
-        error: 'not_invited',
-        message: 'You have not been invited to access the dashboard. Please contact an administrator.'
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log('User invitation found:', email);
 
     // Check if user exists by email
     const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
@@ -230,8 +244,8 @@ serve(async (req) => {
       console.log('New user created:', userId);
     }
 
-    // Mark invitation as used (if not already used)
-    if (!invitation.used_at) {
+    // Mark invitation as used (if not already used) - only for web auth
+    if (!isExtensionAuth && typeof invitationToMark !== 'undefined' && !invitationToMark.used_at) {
       await supabase
         .from('invitations')
         .update({ used_at: new Date().toISOString() })
@@ -239,7 +253,42 @@ serve(async (req) => {
       console.log('Invitation marked as used for:', email);
     }
 
-    // Generate a magic link / session for the user
+    // For extension auth, return access token directly
+    if (isExtensionAuth) {
+      // Generate a session for the extension
+      const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+      });
+
+      if (sessionError) {
+        console.error('Error generating session for extension:', sessionError);
+        return new Response(JSON.stringify({ error: 'Failed to generate session' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Update profile with MS ID if needed
+      await supabase
+        .from('profiles')
+        .update({ ms_id: msId })
+        .eq('id', userId);
+
+      console.log('Extension Azure AD authentication successful for:', email);
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        userId,
+        email,
+        displayName,
+        magicLink: sessionData.properties?.action_link,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Generate a magic link / session for the user (web auth)
     // Use validated base URL to prevent open redirect
     const dashboardUrl = `${validatedBaseUrl}/dashboard`;
     console.log('Generating magic link with redirect to:', dashboardUrl);
