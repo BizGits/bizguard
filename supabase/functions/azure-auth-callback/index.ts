@@ -282,9 +282,28 @@ serve(async (req) => {
         });
       }
 
-      // The action_link contains a token_hash we can use
-      const actionLink = linkData.properties?.action_link;
-      const tokenHash = linkData.properties?.hashed_token;
+      // The action_link contains a token we can use to verify a session.
+      // NOTE: Some clients (older extension builds) expect the query param name `token_hash`.
+      const actionLinkRaw = linkData.properties?.action_link ?? null;
+      const tokenHash = linkData.properties?.hashed_token ?? null;
+
+      const actionLink = (() => {
+        if (!actionLinkRaw) return null;
+        try {
+          const u = new URL(actionLinkRaw);
+          const token = u.searchParams.get('token');
+          const tokenHashParam = u.searchParams.get('token_hash');
+
+          // Back-compat: add token_hash when only token is present
+          if (!tokenHashParam && token) {
+            u.searchParams.set('token_hash', token);
+          }
+
+          return u.toString();
+        } catch {
+          return actionLinkRaw;
+        }
+      })();
 
       console.log('Extension Azure AD authentication successful for:', email);
 
