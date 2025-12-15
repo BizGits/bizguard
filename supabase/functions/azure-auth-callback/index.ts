@@ -49,6 +49,7 @@ serve(async (req) => {
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:8080',
+      'https://bizguard.bizcuits.io',
       Deno.env.get('SUPABASE_URL'),
     ].filter(Boolean) as string[];
 
