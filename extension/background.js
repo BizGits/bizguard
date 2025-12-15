@@ -379,45 +379,87 @@ async function handleMicrosoftLogin() {
       throw new Error(callbackData.message || callbackData.error || 'Authentication failed');
     }
 
-    console.log('Got callback response:', { hasEmail: !!callbackData.email, hasMagicLink: !!callbackData.magicLink });
+    console.log('Got callback response:', { 
+      hasEmail: !!callbackData.email, 
+      hasMagicLink: !!callbackData.magicLink,
+      hasTokenHash: !!callbackData.tokenHash,
+      hasUserData: !!callbackData.userData
+    });
 
-    // Extract access token from magic link
-    if (callbackData.magicLink) {
-      const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
-      
-      if (access_token && user) {
-        authToken = access_token;
-        userProfile = {
-          id: user.id,
-          email: user.email,
-          displayName: user.user_metadata?.full_name || user.email
-        };
-      } else {
-        // Fallback: use user info from callback directly
-        console.log('Magic link verification failed, using callback data');
-        userProfile = {
-          id: callbackData.userId,
-          email: callbackData.email,
-          displayName: callbackData.displayName || callbackData.email.split('@')[0]
-        };
-        // We need an auth token - try to sign in with magic link approach
-        authToken = null;
+    // Try to verify magic link and get access token
+    let tokenObtained = false;
+    
+    if (callbackData.magicLink && callbackData.tokenHash) {
+      // Try to verify using token hash directly
+      try {
+        const verifyResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify?token=${callbackData.tokenHash}&type=magiclink`, {
+          method: 'GET',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY
+          },
+          redirect: 'manual'
+        });
+        
+        if (verifyResponse.status === 303 || verifyResponse.status === 302) {
+          const location = verifyResponse.headers.get('location');
+          if (location) {
+            const redirectUrl = new URL(location);
+            const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            
+            if (accessToken) {
+              authToken = accessToken;
+              tokenObtained = true;
+              console.log('Access token obtained from token hash verification');
+            }
+          }
+        }
+      } catch (verifyError) {
+        console.warn('Token hash verification failed:', verifyError);
       }
-    } else {
-      throw new Error('No session data received from server');
+    }
+    
+    // Fallback: Try magic link verification
+    if (!tokenObtained && callbackData.magicLink) {
+      const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
+      if (access_token) {
+        authToken = access_token;
+        tokenObtained = true;
+        console.log('Access token obtained from magic link verification');
+      }
     }
 
-    if (!authToken) {
-      console.warn('No access token obtained, session may be limited');
+    // Set user profile from callback data
+    if (callbackData.userData) {
+      userProfile = {
+        id: callbackData.userData.id,
+        email: callbackData.userData.email,
+        displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0]
+      };
+    } else if (callbackData.email) {
+      userProfile = {
+        id: callbackData.userId,
+        email: callbackData.email,
+        displayName: callbackData.displayName || callbackData.email.split('@')[0]
+      };
+    } else {
+      throw new Error('No user data received from server');
+    }
+
+    // Even without a token, we can still work in limited mode with user profile
+    if (!tokenObtained) {
+      console.warn('No access token obtained, extension will work in limited mode');
     }
 
     await saveState();
+    
+    // Only try API calls if we have a token
     if (authToken) {
       await updateExtensionStatus(isEnabled);
       await logEvent('LOGIN');
     }
 
-    console.log('Microsoft login successful:', userProfile?.email);
+    console.log('Microsoft login successful:', userProfile?.email, 'Token:', tokenObtained ? 'Yes' : 'No');
 
     return { success: true, user: userProfile };
   } catch (error) {
