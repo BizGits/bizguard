@@ -174,33 +174,53 @@ body {
 }
 
 .error-message {
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: rgba(255, 59, 48, 0.1);
-  border-radius: 8px;
+  border-radius: 10px;
   color: #d70015;
   font-size: 13px;
 }
 
 .error-message .error-text {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.diagnostics-preview {
+  font-size: 11px;
+  color: #86868b;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.diagnostics-preview div {
+  margin-bottom: 4px;
+}
+
+.diagnostics-preview strong {
+  color: #1d1d1f;
 }
 
 .copy-diagnostics-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255, 59, 48, 0.15);
+  padding: 8px 14px;
+  background: rgba(255, 59, 48, 0.1);
   border: 1px solid rgba(215, 0, 21, 0.2);
-  border-radius: 6px;
+  border-radius: 8px;
   color: #d70015;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .copy-diagnostics-btn:hover {
-  background: rgba(255, 59, 48, 0.25);
+  background: rgba(255, 59, 48, 0.2);
 }
 
 /* Buttons */

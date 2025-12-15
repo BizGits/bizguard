@@ -176,11 +176,26 @@ function showError(message, details = null) {
     details,
     timestamp: new Date().toISOString(),
     extensionVersion: chrome.runtime.getManifest().version,
+    extensionId: chrome.runtime.id,
+    redirectUri: typeof chrome.identity !== 'undefined' ? chrome.identity.getRedirectURL() : 'N/A',
     userAgent: navigator.userAgent,
   };
   
+  // Extract diagnostics from details if available
+  let diagnosticsInfo = '';
+  if (details?.diagnostics) {
+    const d = details.diagnostics;
+    diagnosticsInfo = `
+      <div class="diagnostics-preview">
+        <div><strong>Steps:</strong> ${(d.steps || []).join(' → ')}</div>
+        ${d.errors?.length ? `<div><strong>Errors:</strong> ${d.errors.join(', ')}</div>` : ''}
+      </div>
+    `;
+  }
+  
   loginError.innerHTML = `
-    <div class="error-message">${escapeHtml(message)}</div>
+    <div class="error-text">${escapeHtml(message)}</div>
+    ${diagnosticsInfo}
     <button type="button" class="copy-diagnostics-btn" id="copy-diagnostics">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -205,15 +220,27 @@ function hideError() {
 async function copyDiagnostics() {
   if (!lastError) return;
   
+  const diagnosticsData = lastError.details?.diagnostics || {};
+  
   const diagnostics = `BizGuard Extension Diagnostics
 ================================
 Time: ${lastError.timestamp}
 Version: ${lastError.extensionVersion}
+Extension ID: ${lastError.extensionId || 'N/A'}
+Redirect URI: ${lastError.redirectUri || 'N/A'}
 User Agent: ${lastError.userAgent}
 
-Error: ${lastError.message}
+Error Message: ${lastError.message}
 
-Details:
+Authentication Steps:
+${(diagnosticsData.steps || ['No steps recorded']).map((s, i) => '  ' + (i + 1) + '. ' + s).join('\n')}
+
+Errors Encountered:
+${(diagnosticsData.errors || ['None']).map(e => '  - ' + e).join('\n')}
+
+Callback Response Keys: ${(diagnosticsData.callbackKeys || ['N/A']).join(', ')}
+
+Full Details:
 ${JSON.stringify(lastError.details, null, 2)}
 `;
 
@@ -221,20 +248,9 @@ ${JSON.stringify(lastError.details, null, 2)}
     await navigator.clipboard.writeText(diagnostics);
     const btn = document.getElementById('copy-diagnostics');
     if (btn) {
-      btn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-        Copied!
-      `;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
       setTimeout(() => {
-        btn.innerHTML = `
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-          Copy Diagnostics
-        `;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Diagnostics';
       }, 2000);
     }
   } catch (err) {
