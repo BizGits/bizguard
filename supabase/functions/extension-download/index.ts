@@ -173,7 +173,7 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity"],
   "host_permissions": [
@@ -249,7 +249,7 @@ async function generateCodeChallenge(verifier) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.4 installed');
+  console.log('BizGuard v5.5 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -368,72 +368,169 @@ async function handleMessage(message, sender) {
 }
 
 async function handleMicrosoftLogin() {
+  const diagnostics = { startTime: new Date().toISOString(), steps: [], errors: [] };
+  
   try {
     const redirectUri = chrome.identity.getRedirectURL();
-    
-    // Generate PKCE code verifier and challenge
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     
+    diagnostics.steps.push('PKCE generated');
     console.log('Starting Microsoft login with PKCE...');
     console.log('Redirect URI:', redirectUri);
     
-    const initResponse = await fetch(API_BASE + '/azure-auth-init', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redirectUri, codeChallenge })
-    });
-
-    if (!initResponse.ok) throw new Error('Failed to initialize Azure login');
-    const { authUrl } = await initResponse.json();
-
-    const responseUrl = await new Promise((resolve, reject) => {
-      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (redirectUrl) => {
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-        else resolve(redirectUrl);
+    let initResponse;
+    try {
+      initResponse = await fetch(API_BASE + '/azure-auth-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirectUri, codeChallenge })
       });
-    });
+    } catch (e) {
+      diagnostics.errors.push('Init fetch failed: ' + e.message);
+      return { success: false, error: 'Network error', diagnostics };
+    }
+
+    if (!initResponse.ok) {
+      diagnostics.errors.push('Init not ok: ' + initResponse.status);
+      return { success: false, error: 'Failed to initialize Azure login', diagnostics };
+    }
+    
+    const { authUrl } = await initResponse.json();
+    diagnostics.steps.push('Got auth URL');
+
+    let responseUrl;
+    try {
+      responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (redirectUrl) => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(redirectUrl);
+        });
+      });
+      diagnostics.steps.push('Web auth flow completed');
+    } catch (e) {
+      diagnostics.errors.push('Auth flow error: ' + e.message);
+      return { success: false, error: e.message, diagnostics };
+    }
 
     const url = new URL(responseUrl);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
 
-    if (error) throw new Error(url.searchParams.get('error_description') || error);
-    if (!code) throw new Error('No authorization code received');
+    if (error) {
+      diagnostics.errors.push('Azure error: ' + error);
+      return { success: false, error: url.searchParams.get('error_description') || error, diagnostics };
+    }
+    if (!code) {
+      diagnostics.errors.push('No code received');
+      return { success: false, error: 'No authorization code received', diagnostics };
+    }
+    
+    diagnostics.steps.push('Got authorization code');
 
-    // Exchange code with PKCE code_verifier
-    const callbackResponse = await fetch(API_BASE + '/azure-auth-callback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, redirectUri, codeVerifier })
-    });
-
-    const callbackData = await callbackResponse.json();
-    if (!callbackResponse.ok || callbackData.error) {
-      throw new Error(callbackData.message || callbackData.error || 'Authentication failed');
+    let callbackData;
+    try {
+      const callbackResponse = await fetch(API_BASE + '/azure-auth-callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, redirectUri, codeVerifier })
+      });
+      callbackData = await callbackResponse.json();
+      diagnostics.steps.push('Callback received');
+      diagnostics.callbackKeys = Object.keys(callbackData);
+      
+      if (!callbackResponse.ok || callbackData.error) {
+        diagnostics.errors.push('Callback error: ' + (callbackData.message || callbackData.error));
+        return { success: false, error: callbackData.message || callbackData.error || 'Authentication failed', diagnostics };
+      }
+    } catch (e) {
+      diagnostics.errors.push('Callback fetch failed: ' + e.message);
+      return { success: false, error: 'Failed to complete authentication', diagnostics };
     }
 
-    if (callbackData.magicLink) {
-      const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
-      if (access_token && user) {
-        // Validate domain - only allow bizcuits.io
-        const email = user.email?.toLowerCase() || '';
-        if (!email.endsWith('@bizcuits.io')) {
-          throw new Error('Only @bizcuits.io accounts are allowed');
-        }
+    // Extract user profile from server response (already verified by Azure AD)
+    if (callbackData.userData) {
+      userProfile = { id: callbackData.userData.id, email: callbackData.userData.email, displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0] };
+      diagnostics.steps.push('User profile from userData');
+    } else if (callbackData.email) {
+      userProfile = { id: callbackData.userId, email: callbackData.email, displayName: callbackData.displayName || callbackData.email.split('@')[0] };
+      diagnostics.steps.push('User profile from email');
+    } else {
+      diagnostics.errors.push('No user data in response');
+      return { success: false, error: 'No user data received', diagnostics };
+    }
+
+    // Validate domain
+    const email = (userProfile.email || '').toLowerCase();
+    if (!email.endsWith('@bizcuits.io')) {
+      diagnostics.errors.push('Invalid domain: ' + email);
+      userProfile = null;
+      return { success: false, error: 'Only @bizcuits.io accounts are allowed', diagnostics };
+    }
+
+    // Try to get access token (optional - works without it in limited mode)
+    let tokenObtained = false;
+    let connectionMode = 'limited';
+    
+    if (callbackData.tokenHash) {
+      try {
+        const verifyResponse = await fetch(SUPABASE_URL + '/auth/v1/verify?token=' + callbackData.tokenHash + '&type=magiclink', {
+          method: 'GET',
+          headers: { 'apikey': SUPABASE_ANON_KEY },
+          redirect: 'manual'
+        });
         
-        authToken = access_token;
-        userProfile = { id: user.id, email: user.email, displayName: user.user_metadata?.full_name || user.email };
-        await saveState();
-        await logEvent('LOGIN', {});
-        return { success: true, user: userProfile };
+        if (verifyResponse.status === 303 || verifyResponse.status === 302) {
+          const location = verifyResponse.headers.get('location');
+          if (location) {
+            const redirectUrl = new URL(location);
+            const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            if (accessToken) {
+              authToken = accessToken;
+              tokenObtained = true;
+              connectionMode = 'connected';
+              diagnostics.steps.push('Token from hash verify');
+            }
+          }
+        }
+      } catch (e) {
+        diagnostics.steps.push('Hash verify error: ' + e.message);
+      }
+    }
+    
+    if (!tokenObtained && callbackData.magicLink) {
+      try {
+        const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
+        if (access_token) {
+          authToken = access_token;
+          tokenObtained = true;
+          connectionMode = 'connected';
+          diagnostics.steps.push('Token from magic link');
+        }
+      } catch (e) {
+        diagnostics.steps.push('Magic link error: ' + e.message);
       }
     }
 
-    throw new Error('Could not complete authentication');
+    await saveState();
+    diagnostics.steps.push('State saved');
+    
+    if (authToken) {
+      try {
+        await logEvent('LOGIN', {});
+        diagnostics.steps.push('Login event logged');
+      } catch (e) {}
+    }
+
+    diagnostics.steps.push('Complete - mode: ' + connectionMode);
+    console.log('Microsoft login successful:', userProfile?.email, 'Mode:', connectionMode);
+    
+    return { success: true, user: userProfile, mode: connectionMode, diagnostics };
   } catch (error) {
+    diagnostics.errors.push('Unexpected: ' + error.message);
     console.error('Microsoft login error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, diagnostics };
   }
 }
 
@@ -583,7 +680,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.4</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.5</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -636,7 +733,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.4
+const readmeMd = `# BizGuard Extension v5.5
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -660,7 +757,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.4...');
+    console.log('Generating extension ZIP v5.5...');
     
     const zip = new JSZip();
     
