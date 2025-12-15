@@ -786,7 +786,9 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.4.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.5.0.zip"',
+        'Cache-Control': 'no-store, max-age=0',
+        Pragma: 'no-cache',
       },
     });
   } catch (error: unknown) {
