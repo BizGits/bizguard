@@ -343,50 +343,71 @@ async function handleLogin(email, password) {
 
 // Handle Microsoft/Azure AD login
 async function handleMicrosoftLogin() {
+  const diagnostics = {
+    startTime: new Date().toISOString(),
+    steps: [],
+    errors: []
+  };
+
   try {
     // Generate PKCE code verifier and challenge
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     
+    diagnostics.steps.push('PKCE generated');
     console.log('Starting Microsoft login with PKCE');
     
     // Get Azure auth URL from our edge function
-    const initResponse = await fetch(`${API_BASE}/azure-auth-init`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        redirectUri: chrome.identity.getRedirectURL(),
-        codeChallenge: codeChallenge
-      })
-    });
+    let initResponse;
+    try {
+      initResponse = await fetch(`${API_BASE}/azure-auth-init`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          redirectUri: chrome.identity.getRedirectURL(),
+          codeChallenge: codeChallenge
+        })
+      });
+    } catch (fetchError) {
+      diagnostics.errors.push(`Init fetch failed: ${fetchError.message}`);
+      return { success: false, error: 'Network error connecting to auth server', diagnostics };
+    }
 
     if (!initResponse.ok) {
       const errorData = await initResponse.text();
-      console.error('Failed to initialize Azure login:', errorData);
-      throw new Error('Failed to initialize Azure login');
+      diagnostics.errors.push(`Init response not ok: ${initResponse.status} - ${errorData}`);
+      return { success: false, error: 'Failed to initialize Azure login', diagnostics };
     }
 
     const { authUrl, state } = await initResponse.json();
+    diagnostics.steps.push('Got auth URL');
     console.log('Got auth URL, launching web auth flow');
 
     // Launch OAuth flow
-    const responseUrl = await new Promise((resolve, reject) => {
-      chrome.identity.launchWebAuthFlow(
-        {
-          url: authUrl,
-          interactive: true
-        },
-        (redirectUrl) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(redirectUrl);
+    let responseUrl;
+    try {
+      responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow(
+          {
+            url: authUrl,
+            interactive: true
+          },
+          (redirectUrl) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(redirectUrl);
+            }
           }
-        }
-      );
-    });
+        );
+      });
+      diagnostics.steps.push('Web auth flow completed');
+    } catch (authFlowError) {
+      diagnostics.errors.push(`Web auth flow error: ${authFlowError.message}`);
+      return { success: false, error: `Authentication window error: ${authFlowError.message}`, diagnostics };
+    }
 
     console.log('Web auth flow completed');
 
@@ -396,33 +417,46 @@ async function handleMicrosoftLogin() {
     const error = url.searchParams.get('error');
 
     if (error) {
-      throw new Error(url.searchParams.get('error_description') || error);
+      const errorDesc = url.searchParams.get('error_description') || error;
+      diagnostics.errors.push(`Azure error: ${errorDesc}`);
+      return { success: false, error: errorDesc, diagnostics };
     }
 
     if (!code) {
-      throw new Error('No authorization code received');
+      diagnostics.errors.push('No authorization code in redirect URL');
+      return { success: false, error: 'No authorization code received', diagnostics };
     }
 
+    diagnostics.steps.push('Got authorization code');
     console.log('Got authorization code, exchanging for session');
 
     // Exchange code for session via our edge function with PKCE verifier
-    const callbackResponse = await fetch(`${API_BASE}/azure-auth-callback`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        code,
-        redirectUri: chrome.identity.getRedirectURL(),
-        codeVerifier: codeVerifier
-      })
-    });
+    let callbackResponse;
+    let callbackData;
+    try {
+      callbackResponse = await fetch(`${API_BASE}/azure-auth-callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          redirectUri: chrome.identity.getRedirectURL(),
+          codeVerifier: codeVerifier
+        })
+      });
 
-    const callbackData = await callbackResponse.json();
+      callbackData = await callbackResponse.json();
+      diagnostics.steps.push('Callback response received');
+      diagnostics.callbackKeys = Object.keys(callbackData);
+    } catch (callbackError) {
+      diagnostics.errors.push(`Callback fetch failed: ${callbackError.message}`);
+      return { success: false, error: 'Failed to complete authentication with server', diagnostics };
+    }
 
     if (!callbackResponse.ok || callbackData.error) {
-      console.error('Callback error:', callbackData);
-      throw new Error(callbackData.message || callbackData.error || 'Authentication failed');
+      diagnostics.errors.push(`Callback error: ${callbackData.message || callbackData.error}`);
+      return { success: false, error: callbackData.message || callbackData.error || 'Authentication failed', diagnostics };
     }
 
     console.log('Got callback response:', { 
@@ -432,25 +466,31 @@ async function handleMicrosoftLogin() {
       hasUserData: !!callbackData.userData
     });
 
-    // Set user profile from callback data - server already verified the user via Azure AD
+    // Extract user profile from callback data - this is the critical part
+    // Server already verified the user via Azure AD, so we trust this data
     if (callbackData.userData) {
       userProfile = {
         id: callbackData.userData.id,
         email: callbackData.userData.email,
         displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0]
       };
+      diagnostics.steps.push('User profile set from userData');
     } else if (callbackData.email) {
       userProfile = {
         id: callbackData.userId,
         email: callbackData.email,
         displayName: callbackData.displayName || callbackData.email.split('@')[0]
       };
+      diagnostics.steps.push('User profile set from email fields');
     } else {
-      throw new Error('No user data received from server');
+      diagnostics.errors.push('No user data in callback response');
+      return { success: false, error: 'No user data received from server', diagnostics };
     }
 
-    // Try to get an access token for API calls
+    // At this point we have a valid user profile from the server
+    // Token verification is optional - we'll try but won't fail if it doesn't work
     let tokenObtained = false;
+    let connectionMode = 'limited';
     
     // Try token hash verification first (most reliable)
     if (callbackData.tokenHash) {
@@ -473,11 +513,16 @@ async function handleMicrosoftLogin() {
             if (accessToken) {
               authToken = accessToken;
               tokenObtained = true;
+              connectionMode = 'connected';
+              diagnostics.steps.push('Token obtained from hash verification');
               console.log('Access token obtained from token hash verification');
             }
           }
+        } else {
+          diagnostics.steps.push(`Token hash verify status: ${verifyResponse.status}`);
         }
       } catch (verifyError) {
+        diagnostics.steps.push(`Token hash verify error: ${verifyError.message}`);
         console.warn('Token hash verification failed:', verifyError);
       }
     }
@@ -489,29 +534,47 @@ async function handleMicrosoftLogin() {
         if (access_token) {
           authToken = access_token;
           tokenObtained = true;
+          connectionMode = 'connected';
+          diagnostics.steps.push('Token obtained from magic link');
           console.log('Access token obtained from magic link verification');
         }
       } catch (verifyError) {
+        diagnostics.steps.push(`Magic link verify error: ${verifyError.message}`);
         console.warn('Magic link verification failed:', verifyError);
       }
     }
 
-    // Save state regardless of token status - user is authenticated via Azure AD
+    // Save state - we have a valid user profile regardless of token status
     await saveState();
+    diagnostics.steps.push('State saved');
     
     // If we have a token, register status and log event
     if (authToken) {
-      await updateExtensionStatus(isEnabled);
-      await logEvent('LOGIN');
+      try {
+        await updateExtensionStatus(isEnabled);
+        await logEvent('LOGIN');
+        diagnostics.steps.push('Status and login event logged');
+      } catch (apiError) {
+        diagnostics.steps.push(`API call error: ${apiError.message}`);
+      }
     }
 
+    diagnostics.endTime = new Date().toISOString();
+    diagnostics.steps.push(`Login complete - mode: ${connectionMode}`);
     console.log('Microsoft login successful:', userProfile?.email, 'Token:', tokenObtained ? 'Yes' : 'Limited mode');
 
-    // Return success - extension works with profile even without token (limited mode)
-    return { success: true, user: userProfile };
+    // SUCCESS! Return user data even if we don't have a token (limited mode)
+    return { 
+      success: true, 
+      user: userProfile, 
+      mode: connectionMode,
+      diagnostics 
+    };
   } catch (error) {
+    diagnostics.errors.push(`Unexpected error: ${error.message}`);
+    diagnostics.stack = error.stack;
     console.error('Microsoft login error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, diagnostics };
   }
 }
 
