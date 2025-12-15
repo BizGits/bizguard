@@ -1,5 +1,8 @@
 project_id = "livbbxegwifbhtboyczy"
 
+[functions.me]
+verify_jwt = false
+
 [functions.extension-status]
 verify_jwt = false
 

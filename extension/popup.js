@@ -26,13 +26,24 @@ let state = {
   isAuthenticated: false,
   currentBrand: null,
   brands: [],
-  userProfile: null
+  userProfile: null,
+  connectionMode: 'unknown' // 'connected', 'limited', 'unauthenticated'
 };
+
+// Last error for diagnostics
+let lastError = null;
 
 // Initialize popup
 async function init() {
   try {
     state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+    
+    // Check token validity if authenticated
+    if (state.isAuthenticated) {
+      const meResult = await chrome.runtime.sendMessage({ type: 'CHECK_TOKEN' });
+      state.connectionMode = meResult.mode || 'limited';
+    }
+    
     render();
   } catch (error) {
     console.error('Error initializing popup:', error);
@@ -108,12 +119,15 @@ function updateStatusBadge() {
   } else if (!state.isEnabled) {
     statusBadge.className = 'status-badge inactive';
     statusText.textContent = 'Disabled';
+  } else if (state.connectionMode === 'limited') {
+    statusBadge.className = 'status-badge warning';
+    statusText.textContent = 'Limited';
   } else if (!state.currentBrand) {
     statusBadge.className = 'status-badge';
     statusText.textContent = 'No brand';
   } else {
     statusBadge.className = 'status-badge active';
-    statusText.textContent = 'Active';
+    statusText.textContent = state.connectionMode === 'connected' ? 'Connected' : 'Active';
   }
 }
 
@@ -125,7 +139,7 @@ microsoftLoginBtn.addEventListener('click', async () => {
   microsoftLoginBtn.disabled = true;
   microsoftLoginBtn.querySelector('.btn-text').textContent = 'Signing in...';
   microsoftLoginBtn.querySelector('.btn-loader').classList.remove('hidden');
-  loginError.classList.add('hidden');
+  hideError();
   
   try {
     const result = await chrome.runtime.sendMessage({ type: 'MICROSOFT_LOGIN' });
@@ -133,23 +147,107 @@ microsoftLoginBtn.addEventListener('click', async () => {
     if (result.success) {
       state.isAuthenticated = true;
       state.userProfile = result.user;
+      state.connectionMode = result.mode || 'limited';
       
       // Refresh state to get brands
       state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      
+      // Check token validity
+      const meResult = await chrome.runtime.sendMessage({ type: 'CHECK_TOKEN' });
+      state.connectionMode = meResult.mode || 'limited';
+      
       render();
     } else {
-      loginError.textContent = result.error || 'Microsoft login failed';
-      loginError.classList.remove('hidden');
+      showError(result.error || 'Microsoft login failed', result);
     }
   } catch (error) {
-    loginError.textContent = 'An error occurred. Please try again.';
-    loginError.classList.remove('hidden');
+    showError('An error occurred. Please try again.', { caught: error.message });
   } finally {
     microsoftLoginBtn.disabled = false;
     microsoftLoginBtn.querySelector('.btn-text').textContent = 'Sign in with Microsoft';
     microsoftLoginBtn.querySelector('.btn-loader').classList.add('hidden');
   }
 });
+
+// Show error with diagnostics
+function showError(message, details = null) {
+  lastError = {
+    message,
+    details,
+    timestamp: new Date().toISOString(),
+    extensionVersion: chrome.runtime.getManifest().version,
+    userAgent: navigator.userAgent,
+  };
+  
+  loginError.innerHTML = `
+    <div class="error-message">${escapeHtml(message)}</div>
+    <button type="button" class="copy-diagnostics-btn" id="copy-diagnostics">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      Copy Diagnostics
+    </button>
+  `;
+  loginError.classList.remove('hidden');
+  
+  // Add click handler for copy button
+  document.getElementById('copy-diagnostics').addEventListener('click', copyDiagnostics);
+}
+
+// Hide error
+function hideError() {
+  loginError.classList.add('hidden');
+  loginError.innerHTML = '';
+}
+
+// Copy diagnostics to clipboard
+async function copyDiagnostics() {
+  if (!lastError) return;
+  
+  const diagnostics = `BizGuard Extension Diagnostics
+================================
+Time: ${lastError.timestamp}
+Version: ${lastError.extensionVersion}
+User Agent: ${lastError.userAgent}
+
+Error: ${lastError.message}
+
+Details:
+${JSON.stringify(lastError.details, null, 2)}
+`;
+
+  try {
+    await navigator.clipboard.writeText(diagnostics);
+    const btn = document.getElementById('copy-diagnostics');
+    if (btn) {
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Copied!
+      `;
+      setTimeout(() => {
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy Diagnostics
+        `;
+      }, 2000);
+    }
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 // Login form submit
 loginForm.addEventListener('submit', async (e) => {
@@ -162,7 +260,7 @@ loginForm.addEventListener('submit', async (e) => {
   loginBtn.disabled = true;
   loginBtn.querySelector('.btn-text').textContent = 'Signing in...';
   loginBtn.querySelector('.btn-loader').classList.remove('hidden');
-  loginError.classList.add('hidden');
+  hideError();
   
   try {
     const result = await chrome.runtime.sendMessage({
@@ -174,17 +272,16 @@ loginForm.addEventListener('submit', async (e) => {
     if (result.success) {
       state.isAuthenticated = true;
       state.userProfile = result.user;
+      state.connectionMode = 'connected';
       
       // Refresh state to get brands
       state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
       render();
     } else {
-      loginError.textContent = result.error || 'Login failed';
-      loginError.classList.remove('hidden');
+      showError(result.error || 'Login failed', result);
     }
   } catch (error) {
-    loginError.textContent = 'An error occurred. Please try again.';
-    loginError.classList.remove('hidden');
+    showError('An error occurred. Please try again.', { caught: error.message });
   } finally {
     loginBtn.disabled = false;
     loginBtn.querySelector('.btn-text').textContent = 'Sign In';
