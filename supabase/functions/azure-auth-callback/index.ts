@@ -106,15 +106,15 @@ serve(async (req) => {
       scope: 'openid profile email User.Read',
     };
     
-    // Token exchange: include client_secret (confidential client) and optionally PKCE code_verifier
-    // This keeps extension auth working even when Azure AD is not configured for public client flows.
-    tokenParams.client_secret = clientSecret;
-
+    // For PKCE flow (extension with SPA redirect), don't send client_secret
+    // Azure rejects client_secret for public clients (SPA platform type)
     if (codeVerifier) {
       tokenParams.code_verifier = codeVerifier;
-      console.log('Using PKCE code_verifier for token exchange');
+      console.log('Using PKCE code_verifier for token exchange (public client)');
     } else {
-      console.log('No PKCE code_verifier provided; using client_secret only');
+      // Web auth uses confidential client with client_secret
+      tokenParams.client_secret = clientSecret;
+      console.log('Using client_secret for token exchange (confidential client)');
     }
 
     // Exchange code for tokens
