@@ -386,11 +386,28 @@ async function handleMicrosoftLogin() {
       hasUserData: !!callbackData.userData
     });
 
-    // Try to verify magic link and get access token
+    // Set user profile from callback data - server already verified the user via Azure AD
+    if (callbackData.userData) {
+      userProfile = {
+        id: callbackData.userData.id,
+        email: callbackData.userData.email,
+        displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0]
+      };
+    } else if (callbackData.email) {
+      userProfile = {
+        id: callbackData.userId,
+        email: callbackData.email,
+        displayName: callbackData.displayName || callbackData.email.split('@')[0]
+      };
+    } else {
+      throw new Error('No user data received from server');
+    }
+
+    // Try to get an access token for API calls
     let tokenObtained = false;
     
-    if (callbackData.magicLink && callbackData.tokenHash) {
-      // Try to verify using token hash directly
+    // Try token hash verification first (most reliable)
+    if (callbackData.tokenHash) {
       try {
         const verifyResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify?token=${callbackData.tokenHash}&type=magiclink`, {
           method: 'GET',
@@ -421,46 +438,30 @@ async function handleMicrosoftLogin() {
     
     // Fallback: Try magic link verification
     if (!tokenObtained && callbackData.magicLink) {
-      const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
-      if (access_token) {
-        authToken = access_token;
-        tokenObtained = true;
-        console.log('Access token obtained from magic link verification');
+      try {
+        const { access_token } = await verifyMagicLink(callbackData.magicLink);
+        if (access_token) {
+          authToken = access_token;
+          tokenObtained = true;
+          console.log('Access token obtained from magic link verification');
+        }
+      } catch (verifyError) {
+        console.warn('Magic link verification failed:', verifyError);
       }
     }
 
-    // Set user profile from callback data
-    if (callbackData.userData) {
-      userProfile = {
-        id: callbackData.userData.id,
-        email: callbackData.userData.email,
-        displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0]
-      };
-    } else if (callbackData.email) {
-      userProfile = {
-        id: callbackData.userId,
-        email: callbackData.email,
-        displayName: callbackData.displayName || callbackData.email.split('@')[0]
-      };
-    } else {
-      throw new Error('No user data received from server');
-    }
-
-    // Even without a token, we can still work in limited mode with user profile
-    if (!tokenObtained) {
-      console.warn('No access token obtained, extension will work in limited mode');
-    }
-
+    // Save state regardless of token status - user is authenticated via Azure AD
     await saveState();
     
-    // Only try API calls if we have a token
+    // If we have a token, register status and log event
     if (authToken) {
       await updateExtensionStatus(isEnabled);
       await logEvent('LOGIN');
     }
 
-    console.log('Microsoft login successful:', userProfile?.email, 'Token:', tokenObtained ? 'Yes' : 'No');
+    console.log('Microsoft login successful:', userProfile?.email, 'Token:', tokenObtained ? 'Yes' : 'Limited mode');
 
+    // Return success - extension works with profile even without token (limited mode)
     return { success: true, user: userProfile };
   } catch (error) {
     console.error('Microsoft login error:', error);
