@@ -317,13 +317,23 @@ export default function Auth() {
               </p>
             </div>
 
-            {/* Download Button */}
+            {/* Chrome Web Store Button */}
             <Button
-              className="w-full h-12 text-base rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:scale-[1.02] transition-all mb-6"
+              className="w-full h-12 text-base rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:scale-[1.02] transition-all mb-3"
+              onClick={() => window.open('https://chromewebstore.google.com/detail/bizguard/doicfflahcioedecmmlpjbnomhaonapb', '_blank')}
+            >
+              <Chrome className="w-5 h-5 mr-2" />
+              Install from Chrome Web Store
+            </Button>
+
+            {/* Manual Download Button */}
+            <Button
+              variant="outline"
+              className="w-full h-10 text-sm rounded-full border-white/20 text-slate-300 hover:bg-white/10 mb-6"
               onClick={handleDownload}
             >
-              <Download className="w-5 h-5 mr-2" />
-              Download BizGuard Extension v5.4
+              <Download className="w-4 h-4 mr-2" />
+              Manual Download (v5.4)
             </Button>
 
             {/* Installation Steps */}
