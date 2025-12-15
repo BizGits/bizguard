@@ -213,9 +213,13 @@ async function handleMessage(message, sender) {
         isEnabled,
         currentBrand,
         brands,
-        isAuthenticated: !!authToken,
-        userProfile
+        isAuthenticated: !!authToken || !!userProfile,
+        userProfile,
+        connectionMode: authToken ? 'connected' : (userProfile ? 'limited' : 'unauthenticated')
       };
+    
+    case 'CHECK_TOKEN':
+      return await checkTokenValidity();
     
     case 'SET_ENABLED':
       isEnabled = message.enabled;
@@ -254,6 +258,48 @@ async function handleMessage(message, sender) {
     
     default:
       return { error: 'Unknown message type' };
+  }
+}
+
+// Check token validity via /me endpoint
+async function checkTokenValidity() {
+  if (!authToken) {
+    return { 
+      valid: false, 
+      mode: userProfile ? 'limited' : 'unauthenticated',
+      user: userProfile
+    };
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE}/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.valid) {
+      // Update user profile with fresh data
+      if (data.user) {
+        userProfile = {
+          id: data.user.id,
+          email: data.user.email,
+          displayName: data.user.displayName
+        };
+        await saveState();
+      }
+      return { valid: true, mode: 'connected', user: data.user };
+    } else {
+      console.log('Token invalid:', data.error);
+      return { valid: false, mode: 'limited', user: userProfile, error: data.error };
+    }
+  } catch (error) {
+    console.error('Error checking token:', error);
+    return { valid: false, mode: 'limited', user: userProfile, error: error.message };
   }
 }
 
