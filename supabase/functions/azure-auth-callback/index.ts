@@ -105,13 +105,15 @@ serve(async (req) => {
       scope: 'openid profile email User.Read',
     };
     
-    // Use PKCE code_verifier if provided (for extensions/SPAs), otherwise use client_secret
+    // Token exchange: include client_secret (confidential client) and optionally PKCE code_verifier
+    // This keeps extension auth working even when Azure AD is not configured for public client flows.
+    tokenParams.client_secret = clientSecret;
+
     if (codeVerifier) {
       tokenParams.code_verifier = codeVerifier;
       console.log('Using PKCE code_verifier for token exchange');
     } else {
-      tokenParams.client_secret = clientSecret;
-      console.log('Using client_secret for token exchange');
+      console.log('No PKCE code_verifier provided; using client_secret only');
     }
 
     // Exchange code for tokens
