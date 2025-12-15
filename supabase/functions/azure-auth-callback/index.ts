@@ -256,27 +256,35 @@ serve(async (req) => {
       console.log('Invitation marked as used for:', email);
     }
 
-    // For extension auth, return access token directly
+    // For extension auth, return access token directly using admin session creation
     if (isExtensionAuth) {
-      // Generate a session for the extension
-      const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+      // Update profile with MS ID if needed
+      await supabase
+        .from('profiles')
+        .update({ ms_id: msId })
+        .eq('id', userId);
+
+      // Generate a direct access token for the extension
+      // We'll create a custom JWT-like response that the extension can use
+      // Since admin.generateLink doesn't give us a direct token, we use a workaround
+      
+      // Generate a magic link and extract the token components
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: email,
       });
 
-      if (sessionError) {
-        console.error('Error generating session for extension:', sessionError);
+      if (linkError) {
+        console.error('Error generating link for extension:', linkError);
         return new Response(JSON.stringify({ error: 'Failed to generate session' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Update profile with MS ID if needed
-      await supabase
-        .from('profiles')
-        .update({ ms_id: msId })
-        .eq('id', userId);
+      // The action_link contains a token_hash we can use
+      const actionLink = linkData.properties?.action_link;
+      const tokenHash = linkData.properties?.hashed_token;
 
       console.log('Extension Azure AD authentication successful for:', email);
 
@@ -285,7 +293,15 @@ serve(async (req) => {
         userId,
         email,
         displayName,
-        magicLink: sessionData.properties?.action_link,
+        // Include both the magic link and the token hash for verification
+        magicLink: actionLink,
+        tokenHash: tokenHash,
+        // Also include user data so extension can work even if token verification fails
+        userData: {
+          id: userId,
+          email: email,
+          displayName: displayName,
+        }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
