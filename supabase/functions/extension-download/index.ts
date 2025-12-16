@@ -488,7 +488,17 @@ async function handleMicrosoftLogin() {
     let tokenObtained = false;
     let connectionMode = 'limited';
     
-    if (callbackData.tokenHash) {
+    // First, check if callback returned a direct authToken (preferred method)
+    if (callbackData.authToken) {
+      authToken = callbackData.authToken;
+      tokenObtained = true;
+      connectionMode = 'connected';
+      diagnostics.steps.push('Token from direct authToken');
+      console.log('Direct auth token received from callback');
+    }
+    
+    // Fallback: try tokenHash verification
+    if (!tokenObtained && callbackData.tokenHash) {
       try {
         const verifyResponse = await fetch(SUPABASE_URL + '/auth/v1/verify?token=' + callbackData.tokenHash + '&type=magiclink', {
           method: 'GET',
@@ -515,6 +525,7 @@ async function handleMicrosoftLogin() {
       }
     }
     
+    // Fallback: try magic link verification
     if (!tokenObtained && callbackData.magicLink) {
       try {
         const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
@@ -528,6 +539,9 @@ async function handleMicrosoftLogin() {
         diagnostics.steps.push('Magic link error: ' + e.message);
       }
     }
+    
+    // Log final token status
+    console.log('Token obtained:', tokenObtained, 'Mode:', connectionMode, 'Has authToken:', !!authToken);
 
     await saveState();
     diagnostics.steps.push('State saved');

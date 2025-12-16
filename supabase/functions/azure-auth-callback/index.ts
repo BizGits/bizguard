@@ -264,11 +264,7 @@ serve(async (req) => {
         .update({ ms_id: msId })
         .eq('id', userId);
 
-      // Generate a direct access token for the extension
-      // We'll create a custom JWT-like response that the extension can use
-      // Since admin.generateLink doesn't give us a direct token, we use a workaround
-      
-      // Generate a magic link and extract the token components
+      // Generate a magic link and verify it server-side to get an access token
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: email,
@@ -282,39 +278,43 @@ serve(async (req) => {
         });
       }
 
-      // The action_link contains a token we can use to verify a session.
-      // NOTE: Some clients (older extension builds) expect the query param name `token_hash`.
+      // Extract the token from the action link
       const actionLinkRaw = linkData.properties?.action_link ?? null;
-      const tokenHash = linkData.properties?.hashed_token ?? null;
+      let accessToken: string | null = null;
 
-      const actionLink = (() => {
-        if (!actionLinkRaw) return null;
+      if (actionLinkRaw) {
         try {
-          const u = new URL(actionLinkRaw);
-          const token = u.searchParams.get('token');
-          const tokenHashParam = u.searchParams.get('token_hash');
-
-          // Back-compat: add token_hash when only token is present
-          if (!tokenHashParam && token) {
-            u.searchParams.set('token_hash', token);
+          const actionUrl = new URL(actionLinkRaw);
+          const token = actionUrl.searchParams.get('token');
+          
+          if (token) {
+            // Verify the token server-side to get a session
+            const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+              token_hash: token,
+              type: 'magiclink',
+            });
+            
+            if (!verifyError && verifyData?.session?.access_token) {
+              accessToken = verifyData.session.access_token;
+              console.log('Direct access token obtained for extension user:', email);
+            } else {
+              console.log('OTP verify failed:', verifyError?.message || 'No session returned');
+            }
           }
-
-          return u.toString();
-        } catch {
-          return actionLinkRaw;
+        } catch (e) {
+          console.error('Error extracting/verifying token:', e);
         }
-      })();
+      }
 
-      console.log('Extension Azure AD authentication successful for:', email);
+      console.log('Extension Azure AD authentication successful for:', email, 'Has token:', !!accessToken);
 
       return new Response(JSON.stringify({ 
         success: true,
         userId,
         email,
         displayName,
-        // Include both the magic link and the token hash for verification
-        magicLink: actionLink,
-        tokenHash: tokenHash,
+        // Return direct access token for extension
+        authToken: accessToken,
         // Also include user data so extension can work even if token verification fails
         userData: {
           id: userId,
