@@ -339,7 +339,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleMessage(message, sender) {
   switch (message.type) {
     case 'GET_STATE':
-      return { isEnabled, currentBrand, brands, isAuthenticated: !!authToken, userProfile };
+      return {
+        isEnabled,
+        currentBrand,
+        brands,
+        // Consider a user "authenticated" if we have identity (userProfile), even if we couldn't obtain a token (limited mode)
+        isAuthenticated: !!authToken || !!userProfile,
+        userProfile,
+        mode: authToken ? 'connected' : (userProfile ? 'limited' : 'none')
+      };
     case 'SET_ENABLED':
       isEnabled = message.enabled;
       await saveState();
