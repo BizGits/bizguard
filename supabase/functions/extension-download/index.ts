@@ -157,7 +157,7 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.8.0",
+  "version": "5.9.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity", "scripting", "tabs"],
   "host_permissions": [
@@ -202,7 +202,7 @@ const manifestJson = `{
   }
 }`;
 
-const backgroundJs = `// BizGuard Background Service Worker v5.8.0
+const backgroundJs = `// BizGuard Background Service Worker v5.9.0
 const API_BASE = '${SUPABASE_URL}/functions/v1';
 const SUPABASE_URL = '${SUPABASE_URL}';
 const SUPABASE_ANON_KEY = '${SUPABASE_ANON_KEY}';
@@ -240,7 +240,7 @@ async function ensureStateLoaded() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.8.0 installed');
+  console.log('BizGuard v5.9.0 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -252,7 +252,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('BizGuard v5.8.0 starting up...');
+  console.log('BizGuard v5.9.0 starting up...');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -619,7 +619,7 @@ async function logEvent(action, data) {
 }`;
 
 // Original content.js with brand auto-detection + backend brand support
-const contentJs = `// BizGuard Content Script v5.8.0 - Brand Auto-Detection + Backend Support
+const contentJs = `// BizGuard Content Script v5.9.0 - Brand Auto-Detection + Backend Support
 (function() {
   console.log('[BizGuard] Content script booting...');
 
@@ -1082,7 +1082,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.8.0</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.9.0</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -1131,7 +1131,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.8.0
+const readmeMd = `# BizGuard Extension v5.9.0
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -1161,7 +1161,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.8.0...');
+    console.log('Generating extension ZIP v5.9.0...');
     
     const zip = new JSZip();
     
@@ -1188,7 +1188,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.8.0.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.9.0.zip"',
         'Cache-Control': 'no-store, max-age=0',
         Pragma: 'no-cache',
       },
