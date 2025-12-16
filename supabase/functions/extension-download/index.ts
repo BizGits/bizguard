@@ -173,7 +173,7 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.5.0",
+  "version": "5.6.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity"],
   "host_permissions": [
@@ -249,7 +249,7 @@ async function generateCodeChallenge(verifier) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.5 installed');
+  console.log('BizGuard v5.6 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
