@@ -173,29 +173,21 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.6.0",
+  "version": "5.7.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": ["storage", "activeTab", "alarms", "identity"],
   "host_permissions": [
     "${SUPABASE_URL}/*",
     "https://login.microsoftonline.com/*",
     "https://graph.microsoft.com/*",
-    "https://*.zendesk.com/*",
-    "https://*.freshdesk.com/*",
-    "https://*.intercom.io/*",
-    "https://*.helpscout.net/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [{
-    "matches": [
-      "https://*.zendesk.com/*",
-      "https://*.freshdesk.com/*",
-      "https://*.intercom.io/*",
-      "https://*.helpscout.net/*"
-    ],
+    "matches": ["<all_urls>"],
     "js": ["content.js"],
     "css": ["content.css"],
     "run_at": "document_idle"
@@ -227,6 +219,7 @@ let currentBrand = null;
 let isEnabled = true;
 let authToken = null;
 let userProfile = null;
+let stateLoaded = false;
 
 // PKCE Helper Functions
 function generateCodeVerifier() {
@@ -248,8 +241,15 @@ async function generateCodeChallenge(verifier) {
     .replace(/=+$/, '');
 }
 
+// Ensure state is loaded before handling any messages
+async function ensureStateLoaded() {
+  if (!stateLoaded) {
+    await loadState();
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.6 installed');
+  console.log('BizGuard v5.7 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
@@ -268,6 +268,8 @@ async function loadState() {
   authToken = data.authToken || null;
   userProfile = data.userProfile || null;
   brands = data.brands || [];
+  stateLoaded = true;
+  console.log('State loaded:', { isEnabled, hasBrand: !!currentBrand, hasToken: !!authToken, hasProfile: !!userProfile, brandsCount: brands.length });
 }
 
 async function saveState() {
@@ -332,7 +334,7 @@ function notifyContentScripts(message) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  ensureStateLoaded().then(() => handleMessage(message, sender)).then(sendResponse);
   return true;
 });
 
@@ -688,7 +690,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.6.0</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.7.0</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -741,7 +743,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.6.0
+const readmeMd = `# BizGuard Extension v5.7.0
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -765,7 +767,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.6.0...');
+    console.log('Generating extension ZIP v5.7.0...');
     
     const zip = new JSZip();
     
