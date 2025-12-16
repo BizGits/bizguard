@@ -7,8 +7,11 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("Heartbeat function called, method:", req.method);
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("Handling OPTIONS preflight");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -18,7 +21,10 @@ serve(async (req) => {
     
     // Get auth header
     const authHeader = req.headers.get("Authorization");
+    console.log("Auth header present:", !!authHeader);
+    
     if (!authHeader) {
+      console.error("Missing authorization header");
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -29,6 +35,7 @@ serve(async (req) => {
     
     // Verify the user's token
     const token = authHeader.replace("Bearer ", "");
+    console.log("Verifying token...");
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !user) {
@@ -38,13 +45,16 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    
+    console.log("User verified:", user.id);
 
     // Parse body for optional extension info
     let body: any = {};
     try {
       body = await req.json();
+      console.log("Heartbeat body:", JSON.stringify(body));
     } catch {
-      // Body is optional for heartbeat
+      console.log("No body provided");
     }
 
     const { browser, browser_version, extension_version } = body;
@@ -61,6 +71,8 @@ serve(async (req) => {
     if (browser) updateData.browser = browser;
     if (browser_version) updateData.browser_version = browser_version;
     if (extension_version) updateData.extension_version = extension_version;
+    
+    console.log("Updating profile with:", JSON.stringify(updateData));
 
     const { error: updateError } = await supabaseClient
       .from("profiles")
@@ -75,7 +87,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Heartbeat received from user ${user.id} at ${now}`);
+    console.log(`Heartbeat SUCCESS for user ${user.id} - browser: ${browser}, version: ${extension_version}`);
 
     return new Response(
       JSON.stringify({ 
@@ -89,7 +101,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Heartbeat error:", error);
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
