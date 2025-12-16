@@ -680,7 +680,7 @@ const popupHtml = `<!DOCTYPE html>
 <body>
 <div class="popup-container">
   <header class="header">
-    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.5</span></div></div>
+    <div class="logo"><img src="icons/icon48.png" alt="BizGuard" class="logo-icon"><div class="logo-text"><h1>BizGuard</h1><span class="version">v5.6.0</span></div></div>
     <div id="status-badge" class="status-badge active"><span class="status-dot"></span><span class="status-text">Active</span></div>
   </header>
   <section id="login-section" class="section login-section hidden">
@@ -733,7 +733,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.5
+const readmeMd = `# BizGuard Extension v5.6.0
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -757,7 +757,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Generating extension ZIP v5.5...');
+    console.log('Generating extension ZIP v5.6.0...');
     
     const zip = new JSZip();
     
@@ -786,7 +786,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.5.0.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.6.0.zip"',
         'Cache-Control': 'no-store, max-age=0',
         Pragma: 'no-cache',
       },
