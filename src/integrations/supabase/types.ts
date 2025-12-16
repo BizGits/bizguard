@@ -220,6 +220,7 @@ export type Database = {
         Returns: boolean
       }
       mark_inactive_extensions: { Args: never; Returns: undefined }
+      purge_old_events: { Args: never; Returns: undefined }
       update_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
