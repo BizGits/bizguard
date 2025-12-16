@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Loader2, Code, Download, Chrome, Globe, Info } from 'lucide-react';
+import { Loader2, Download, Chrome, Globe, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import logo from '@/assets/logo.png';
-
-const DEV_CODE = 'Dev1234';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -17,9 +14,6 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const { user, isLoading } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [showDevMode, setShowDevMode] = useState(false);
-  const [devCode, setDevCode] = useState('');
-  const [isDevSigningIn, setIsDevSigningIn] = useState(false);
 
   // Handle Azure AD callback
   useEffect(() => {
@@ -130,66 +124,6 @@ export default function Auth() {
     }
   };
 
-  const handleDevSignIn = async () => {
-    if (devCode !== DEV_CODE) {
-      toast({
-        title: 'Invalid code',
-        description: 'The dev code is incorrect',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsDevSigningIn(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: 'dev@bizguard.local',
-        password: DEV_CODE,
-      });
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          const { error: signUpError } = await supabase.auth.signUp({
-            email: 'dev@bizguard.local',
-            password: DEV_CODE,
-            options: {
-              data: {
-                full_name: 'Dev User',
-              },
-            },
-          });
-
-          if (signUpError) {
-            toast({
-              title: 'Dev sign in failed',
-              description: signUpError.message,
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Dev account created',
-              description: 'Signing you in...',
-            });
-          }
-        } else {
-          toast({
-            title: 'Dev sign in failed',
-            description: error.message,
-            variant: 'destructive',
-          });
-        }
-      }
-    } catch (error) {
-      toast({
-        title: 'Dev sign in failed',
-        description: 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsDevSigningIn(false);
-    }
-  };
-
   const handleDownload = () => {
     const downloadUrl = `${SUPABASE_URL}/functions/v1/extension-download`;
     const link = document.createElement('a');
@@ -267,43 +201,6 @@ export default function Auth() {
                   )}
                   Sign in with Microsoft
                 </Button>
-              )}
-
-              {/* Dev Mode Toggle */}
-              {!user && (
-                <div className="pt-4 border-t border-white/10">
-                  <button
-                    onClick={() => setShowDevMode(!showDevMode)}
-                    className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-200 transition-colors mx-auto"
-                  >
-                    <Code className="w-3 h-3" />
-                    Dev Mode
-                  </button>
-
-                  {showDevMode && (
-                    <div className="mt-4 space-y-3 animate-fade-in">
-                      <Input
-                        type="password"
-                        placeholder="Enter dev code"
-                        value={devCode}
-                        onChange={(e) => setDevCode(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleDevSignIn()}
-                        className="bg-slate-800/50 border-white/10 text-slate-50"
-                      />
-                      <Button
-                        variant="outline"
-                        className="w-full border-white/20 text-slate-200 hover:bg-white/10"
-                        onClick={handleDevSignIn}
-                        disabled={isDevSigningIn || !devCode}
-                      >
-                        {isDevSigningIn ? (
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : null}
-                        Sign in as Dev
-                      </Button>
-                    </div>
-                  )}
-                </div>
               )}
             </div>
           </div>
