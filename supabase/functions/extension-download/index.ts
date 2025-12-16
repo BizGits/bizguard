@@ -240,16 +240,27 @@ async function ensureStateLoaded() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.8 installed');
+  console.log('BizGuard v5.8.0 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
+  // Send heartbeat immediately on install to set extension_active status
+  if (authToken) {
+    console.log('Auth token found, sending install heartbeat');
+    await sendHeartbeat();
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
+  console.log('BizGuard v5.8.0 starting up...');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
+  // Send heartbeat immediately on startup to restore extension_active status
+  if (authToken) {
+    console.log('Auth token found, sending startup heartbeat');
+    await sendHeartbeat();
+  }
 });
 
 async function loadState() {
@@ -292,19 +303,27 @@ function setupHeartbeat() {
 }
 
 async function sendHeartbeat() {
-  if (!authToken) return;
+  if (!authToken) {
+    console.log('Heartbeat skipped - no auth token');
+    return;
+  }
   try {
     const browserInfo = getBrowserInfo();
-    await fetch(API_BASE + '/heartbeat', {
+    console.log('Sending heartbeat with browser:', browserInfo);
+    const response = await fetch(API_BASE + '/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
       body: JSON.stringify({
         browser: browserInfo.name,
         browser_version: browserInfo.version,
-        extension_version: chrome.runtime.getManifest().version,
-        is_active: isEnabled
+        extension_version: chrome.runtime.getManifest().version
       })
     });
+    if (response.ok) {
+      console.log('Heartbeat sent successfully');
+    } else {
+      console.error('Heartbeat failed:', response.status);
+    }
   } catch (error) {
     console.error('Heartbeat error:', error);
   }
@@ -513,7 +532,14 @@ async function handleMicrosoftLogin() {
     await saveState();
     diagnostics.steps.push('State saved');
     
+    // Send heartbeat immediately to set extension_active and browser info
     if (authToken) {
+      try {
+        await sendHeartbeat();
+        diagnostics.steps.push('Initial heartbeat sent');
+      } catch (e) {
+        diagnostics.steps.push('Initial heartbeat error: ' + e.message);
+      }
       try {
         await logEvent('LOGIN', {});
         diagnostics.steps.push('Login event logged');
