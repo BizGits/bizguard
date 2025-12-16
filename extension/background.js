@@ -9,11 +9,23 @@ let currentBrand = null;
 let isEnabled = true;
 let authToken = null;
 let userProfile = null;
+let stateLoaded = false;
+
+// Ensure state is loaded (called before handling messages)
+async function ensureStateLoaded() {
+  if (!stateLoaded) {
+    await loadState();
+    stateLoaded = true;
+  }
+}
+
+// Load state immediately when service worker starts
+ensureStateLoaded();
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('BizGuard v5 installed');
-  await loadState();
+  await ensureStateLoaded();
   await fetchBrands();
   setupHeartbeat();
 });
@@ -21,7 +33,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 // On startup
 chrome.runtime.onStartup.addListener(async () => {
   console.log('BizGuard starting up');
-  await loadState();
+  await ensureStateLoaded();
   await fetchBrands();
   setupHeartbeat();
 });
@@ -42,7 +54,13 @@ async function loadState() {
   userProfile = data.userProfile || null;
   brands = data.brands || [];
   
-  console.log('State loaded:', { isEnabled, currentBrand: currentBrand?.name, hasAuth: !!authToken });
+  console.log('State loaded from storage:', { 
+    isEnabled, 
+    currentBrand: currentBrand?.name, 
+    hasAuth: !!authToken,
+    hasProfile: !!userProfile,
+    userEmail: userProfile?.email
+  });
 }
 
 // Save state to storage
@@ -202,7 +220,8 @@ function notifyContentScripts(message) {
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
+  // Ensure state is loaded before handling any message
+  ensureStateLoaded().then(() => handleMessage(message, sender)).then(sendResponse);
   return true; // Keep channel open for async response
 });
 
