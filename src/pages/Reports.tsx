@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Download, FileText, Calendar, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
+import { Download, FileText, Calendar, TrendingUp, TrendingDown, BarChart3, User, ChevronDown, ChevronUp, Shield, ToggleLeft } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,18 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface Event {
   id: string;
@@ -33,8 +42,20 @@ interface Event {
   term: string | null;
   url: string | null;
   created_at: string;
+  user_id: string;
   profiles?: { display_name: string } | null;
   brands?: { name: string } | null;
+}
+
+interface UserReport {
+  userId: string;
+  userName: string;
+  blocked: number;
+  toggledOff: number;
+  toggledOn: number;
+  logins: number;
+  topBlockedTerms: { term: string; count: number }[];
+  recentActivity: Event[];
 }
 
 interface ReportData {
@@ -45,9 +66,142 @@ interface ReportData {
   topUsers: { user: string; count: number }[];
   dailyData: { date: string; blocked: number; toggled: number }[];
   weeklyComparison: { current: number; previous: number; change: number };
+  userReports: UserReport[];
 }
 
 type ReportPeriod = 'week' | 'month' | '3months';
+
+const COLORS = ['hsl(0, 72%, 51%)', 'hsl(45, 93%, 47%)', 'hsl(142, 76%, 46%)', 'hsl(217, 91%, 60%)'];
+
+function UserReportCard({ userReport }: { userReport: UserReport }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const totalEvents = userReport.blocked + userReport.toggledOff + userReport.toggledOn + userReport.logins;
+
+  const pieData = [
+    { name: 'Blocked', value: userReport.blocked, color: 'hsl(0, 72%, 51%)' },
+    { name: 'Toggled Off', value: userReport.toggledOff, color: 'hsl(45, 93%, 47%)' },
+    { name: 'Toggled On', value: userReport.toggledOn, color: 'hsl(142, 76%, 46%)' },
+    { name: 'Logins', value: userReport.logins, color: 'hsl(217, 91%, 60%)' },
+  ].filter(d => d.value > 0);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <div className="flex items-center justify-between p-4 rounded-xl bg-accent/30 hover:bg-accent/50 cursor-pointer transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="text-sm font-semibold text-primary">
+                {userReport.userName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">{userReport.userName}</p>
+              <p className="text-sm text-muted-foreground">{totalEvents} total events</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {userReport.blocked > 0 && (
+                <Badge variant="destructive" className="gap-1">
+                  <Shield className="w-3 h-3" />
+                  {userReport.blocked}
+                </Badge>
+              )}
+              {(userReport.toggledOff > 0 || userReport.toggledOn > 0) && (
+                <Badge variant="secondary" className="gap-1 bg-warning/20 text-warning border-warning/30">
+                  <ToggleLeft className="w-3 h-3" />
+                  {userReport.toggledOff + userReport.toggledOn}
+                </Badge>
+              )}
+            </div>
+            {isOpen ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+          </div>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-3 p-4 rounded-xl border border-border/50 bg-card/50">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Stats breakdown */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-foreground">Activity Breakdown</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-destructive/10">
+                  <p className="text-xs text-muted-foreground">Blocked</p>
+                  <p className="text-xl font-semibold text-destructive">{userReport.blocked}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-warning/10">
+                  <p className="text-xs text-muted-foreground">Toggled Off</p>
+                  <p className="text-xl font-semibold text-warning">{userReport.toggledOff}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-success/10">
+                  <p className="text-xs text-muted-foreground">Toggled On</p>
+                  <p className="text-xl font-semibold text-success">{userReport.toggledOn}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-info/10">
+                  <p className="text-xs text-muted-foreground">Logins</p>
+                  <p className="text-xl font-semibold text-info">{userReport.logins}</p>
+                </div>
+              </div>
+
+              {/* Top blocked terms */}
+              {userReport.topBlockedTerms.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-foreground">Top Blocked Terms</h4>
+                  <div className="space-y-1">
+                    {userReport.topBlockedTerms.map((item) => (
+                      <div key={item.term} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground truncate max-w-[200px]">{item.term}</span>
+                        <span className="text-destructive font-medium">{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pie chart */}
+            {pieData.length > 0 && (
+              <div className="flex flex-col items-center justify-center">
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={60}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-3 justify-center mt-2">
+                  {pieData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span className="text-xs text-muted-foreground">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export default function Reports() {
   const { isAdmin } = useAuth();
@@ -82,6 +236,7 @@ export default function Reports() {
           term,
           url,
           created_at,
+          user_id,
           profiles:user_id (display_name),
           brands:brand_id (name)
         `)
@@ -90,7 +245,7 @@ export default function Reports() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setEvents(data || []);
+      setEvents((data || []) as Event[]);
     } catch (error) {
       console.error('Error fetching events:', error);
     } finally {
@@ -152,6 +307,47 @@ export default function Reports() {
     ).length;
     const change = lastWeekBlocked ? Math.round(((thisWeekBlocked - lastWeekBlocked) / lastWeekBlocked) * 100) : 0;
 
+    // User reports - detailed per-user breakdown
+    const userMap = new Map<string, { userId: string; userName: string; events: Event[] }>();
+    events.forEach(e => {
+      const userId = e.user_id;
+      const userName = e.profiles?.display_name || 'Unknown';
+      if (!userMap.has(userId)) {
+        userMap.set(userId, { userId, userName, events: [] });
+      }
+      userMap.get(userId)!.events.push(e);
+    });
+
+    const userReports: UserReport[] = Array.from(userMap.values()).map(({ userId, userName, events: userEvents }) => {
+      const blocked = userEvents.filter(e => e.action === 'BLOCKED');
+      const toggledOff = userEvents.filter(e => e.action === 'TOGGLED_OFF').length;
+      const toggledOn = userEvents.filter(e => e.action === 'TOGGLED_ON').length;
+      const logins = userEvents.filter(e => e.action === 'LOGIN').length;
+
+      // Top blocked terms for this user
+      const userTermCounts = new Map<string, number>();
+      blocked.forEach(e => {
+        if (e.term) {
+          userTermCounts.set(e.term, (userTermCounts.get(e.term) || 0) + 1);
+        }
+      });
+      const topBlockedTerms = Array.from(userTermCounts.entries())
+        .map(([term, count]) => ({ term, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      return {
+        userId,
+        userName,
+        blocked: blocked.length,
+        toggledOff,
+        toggledOn,
+        logins,
+        topBlockedTerms,
+        recentActivity: userEvents.slice(0, 5),
+      };
+    }).sort((a, b) => b.blocked - a.blocked);
+
     return {
       totalBlocked: blocked.length,
       totalToggled: toggled.length,
@@ -160,6 +356,7 @@ export default function Reports() {
       topUsers,
       dailyData,
       weeklyComparison: { current: thisWeekBlocked, previous: lastWeekBlocked, change },
+      userReports,
     };
   }, [events, dateRange]);
 
@@ -497,6 +694,28 @@ export default function Reports() {
             </CardContent>
           </Card>
         </div>
+
+        {/* User Reports Section */}
+        <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Reports by User
+            </CardTitle>
+            <CardDescription>Detailed activity breakdown per user</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportData.userReports.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No user activity in this period</p>
+            ) : (
+              <div className="space-y-3">
+                {reportData.userReports.map((userReport) => (
+                  <UserReportCard key={userReport.userId} userReport={userReport} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
