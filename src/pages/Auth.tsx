@@ -306,7 +306,7 @@ export default function Auth() {
                     placeholder="XXXX-XXXX"
                     value={downloadPassword}
                     onChange={(e) => setDownloadPassword(e.target.value.toUpperCase())}
-                    className="text-center font-mono text-lg tracking-widest bg-slate-900/50 border-white/10 mb-3"
+                    className="text-center font-mono text-lg tracking-widest bg-slate-900/50 border-white/10 mb-3 text-white placeholder:text-slate-500"
                     maxLength={9}
                   />
                   <p className="text-xs text-slate-500 text-center">
