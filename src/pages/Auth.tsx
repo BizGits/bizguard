@@ -363,8 +363,7 @@ export default function Auth() {
                   <div>
                     <h4 className="font-medium text-slate-200 text-sm mb-1">After Installing</h4>
                     <p className="text-slate-400 text-xs leading-relaxed">
-                      Open your support platform. The BWBlock pill will appear in the bottom-left.
-                      Click "Not logged in" on the pill to sign in with your Microsoft account.
+                      Click on the BizGuard extension icon in your browser extensions to log in.
                     </p>
                   </div>
                 </div>
