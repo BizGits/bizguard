@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,8 @@ import {
   Mail,
   Clock,
   Monitor,
-  Zap
+  Zap,
+  ChevronRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -42,6 +44,7 @@ const getBrowserIcon = (browser: string | null) => {
 };
 
 export default function Users() {
+  const navigate = useNavigate();
   const { isAdmin, profile, isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -294,8 +297,9 @@ export default function Users() {
                 {users.map((user, index) => (
                   <div 
                     key={user.id}
-                    className="flex flex-col lg:flex-row lg:items-center justify-between p-5 rounded-2xl bg-card border border-border/50 hover:border-border transition-colors animate-slide-up gap-4"
+                    className="flex flex-col lg:flex-row lg:items-center justify-between p-5 rounded-2xl bg-card border border-border/50 hover:border-primary/50 hover:bg-accent/30 transition-all cursor-pointer animate-slide-up gap-4"
                     style={{ animationDelay: `${index * 30}ms` }}
+                    onClick={() => navigate(`/dashboard/users/${user.id}`)}
                   >
                     {/* User info */}
                     <div className="flex items-start lg:items-center gap-4 flex-1">
@@ -374,7 +378,7 @@ export default function Users() {
 
                       {/* Role actions - Admin only */}
                       {isAdmin && user.id !== profile?.id && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           {user.role === 'MANAGEMENT' ? (
                             <Button 
                               size="sm" 
@@ -394,6 +398,9 @@ export default function Users() {
                           )}
                         </div>
                       )}
+
+                      {/* View details chevron */}
+                      <ChevronRight className="w-5 h-5 text-muted-foreground hidden lg:block" />
                     </div>
                   </div>
                 ))}
