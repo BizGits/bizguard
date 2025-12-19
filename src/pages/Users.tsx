@@ -18,7 +18,8 @@ import {
   Clock,
   Monitor,
   Zap,
-  ChevronRight
+  ChevronRight,
+  ArrowLeftRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -226,13 +227,23 @@ export default function Users() {
             <h1 className="text-3xl font-semibold text-foreground">Users</h1>
             <p className="text-muted-foreground mt-1">Monitor extension users and their status</p>
           </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-            isLive 
-              ? 'bg-success/20 text-success animate-pulse' 
-              : 'bg-muted text-muted-foreground'
-          }`}>
-            <Zap className={`w-3 h-3 ${isLive ? 'animate-bounce' : ''}`} />
-            {isLive ? 'Live Update' : 'Real-time'}
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/dashboard/users/compare')}
+              className="gap-2"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              Compare Users
+            </Button>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+              isLive 
+                ? 'bg-success/20 text-success animate-pulse' 
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              <Zap className={`w-3 h-3 ${isLive ? 'animate-bounce' : ''}`} />
+              {isLive ? 'Live Update' : 'Real-time'}
+            </div>
           </div>
         </div>
 

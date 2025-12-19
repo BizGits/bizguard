@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Brands from "./pages/Brands";
 import Users from "./pages/Users";
 import UserDetail from "./pages/UserDetail";
+import UserComparison from "./pages/UserComparison";
 import Events from "./pages/Events";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
             <Route path="/dashboard/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/dashboard/users/compare" element={<ProtectedRoute><UserComparison /></ProtectedRoute>} />
             <Route path="/dashboard/users/:userId" element={<ProtectedRoute><UserDetail /></ProtectedRoute>} />
             <Route path="/dashboard/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
             <Route path="/dashboard/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
