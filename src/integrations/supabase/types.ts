@@ -46,6 +46,7 @@ export type Database = {
       brands: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           is_active: boolean
           name: string
@@ -54,6 +55,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -62,6 +64,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           is_active?: boolean
           name?: string
@@ -231,6 +234,9 @@ export type Database = {
         | "TOGGLED_ON"
         | "LOGIN"
         | "LOGOUT"
+        | "BRAND_CREATED"
+        | "BRAND_DELETED"
+        | "BRAND_RESTORED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -359,7 +365,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["ADMIN", "MANAGEMENT"],
-      event_action: ["BLOCKED", "TOGGLED_OFF", "TOGGLED_ON", "LOGIN", "LOGOUT"],
+      event_action: [
+        "BLOCKED",
+        "TOGGLED_OFF",
+        "TOGGLED_ON",
+        "LOGIN",
+        "LOGOUT",
+        "BRAND_CREATED",
+        "BRAND_DELETED",
+        "BRAND_RESTORED",
+      ],
     },
   },
 } as const
