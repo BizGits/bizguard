@@ -1,15 +1,23 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap } from 'lucide-react';
+import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap, Calendar, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { formatDistanceToNow, subDays } from 'date-fns';
+import { formatDistanceToNow, subDays, subMonths, format } from 'date-fns';
 import { BlockingChart } from '@/components/dashboard/BlockingChart';
 import { ActionPieChart } from '@/components/dashboard/ActionPieChart';
 import { toast } from '@/hooks/use-toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 interface StatsCard {
   title: string;
@@ -29,6 +37,15 @@ interface RecentEvent {
   brands?: { name: string };
 }
 
+interface CrossBrandAgent {
+  userId: string;
+  userName: string;
+  blockedCount: number;
+  brandsBlocked: string[];
+}
+
+type DateFilter = '7d' | '30d' | '90d';
+
 export default function Dashboard() {
   const { isAdmin } = useAuth();
   const [stats, setStats] = useState<StatsCard[]>([]);
@@ -37,6 +54,9 @@ export default function Dashboard() {
   const [activeUsers, setActiveUsers] = useState<{ id: string; display_name: string; last_seen_at: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
+  const [crossBrandAgents, setCrossBrandAgents] = useState<CrossBrandAgent[]>([]);
+  const [crossBrandFilter, setCrossBrandFilter] = useState<DateFilter>('30d');
+  const [isCrossBrandLoading, setIsCrossBrandLoading] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -142,10 +162,77 @@ export default function Dashboard() {
     }
   }, [isAdmin]);
 
+  // Fetch cross-brand blocking agents
+  const fetchCrossBrandAgents = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    setIsCrossBrandLoading(true);
+    try {
+      const days = crossBrandFilter === '7d' ? 7 : crossBrandFilter === '30d' ? 30 : 90;
+      const startDate = subDays(new Date(), days);
+
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          user_id,
+          brand_id,
+          profiles:user_id (display_name),
+          brands:brand_id (name)
+        `)
+        .eq('action', 'BLOCKED')
+        .not('brand_id', 'is', null)
+        .gte('created_at', startDate.toISOString());
+
+      if (error) throw error;
+
+      // Group by user and count unique brands
+      const userMap = new Map<string, { userName: string; brands: Set<string>; count: number }>();
+      
+      (data || []).forEach((event: any) => {
+        const userId = event.user_id;
+        const userName = event.profiles?.display_name || 'Unknown';
+        const brandName = event.brands?.name;
+
+        if (!userMap.has(userId)) {
+          userMap.set(userId, { userName, brands: new Set(), count: 0 });
+        }
+        
+        const userData = userMap.get(userId)!;
+        userData.count++;
+        if (brandName) {
+          userData.brands.add(brandName);
+        }
+      });
+
+      // Filter to only users with multiple brands blocked (cross-brand)
+      const crossBrandData: CrossBrandAgent[] = Array.from(userMap.entries())
+        .filter(([_, data]) => data.brands.size > 1)
+        .map(([userId, data]) => ({
+          userId,
+          userName: data.userName,
+          blockedCount: data.count,
+          brandsBlocked: Array.from(data.brands),
+        }))
+        .sort((a, b) => b.blockedCount - a.blockedCount)
+        .slice(0, 10);
+
+      setCrossBrandAgents(crossBrandData);
+    } catch (error) {
+      console.error('Error fetching cross-brand agents:', error);
+    } finally {
+      setIsCrossBrandLoading(false);
+    }
+  }, [isAdmin, crossBrandFilter]);
+
   // Initial fetch
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Fetch cross-brand agents when filter changes
+  useEffect(() => {
+    fetchCrossBrandAgents();
+  }, [fetchCrossBrandAgents]);
 
   // Real-time subscription
   useEffect(() => {
@@ -395,6 +482,78 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Cross-Brand Blocking Agents */}
+        {isAdmin && (
+          <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Award className="w-4 h-4 text-warning" />
+                Top Agents with Cross-Brand Blocks
+              </CardTitle>
+              <Select value={crossBrandFilter} onValueChange={(v) => setCrossBrandFilter(v as DateFilter)}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              {isCrossBrandLoading ? (
+                <div className="h-[150px] flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : crossBrandAgents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No agents with cross-brand blocks in this period
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {crossBrandAgents.map((agent, index) => (
+                    <div 
+                      key={agent.userId} 
+                      className="flex items-center justify-between p-3 rounded-xl bg-accent/30 hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
+                          <span className="text-xs font-bold text-warning">
+                            #{index + 1}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {agent.userName}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {agent.brandsBlocked.slice(0, 3).map((brand) => (
+                              <Badge key={brand} variant="secondary" className="text-xs px-1.5 py-0">
+                                {brand}
+                              </Badge>
+                            ))}
+                            {agent.brandsBlocked.length > 3 && (
+                              <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                +{agent.brandsBlocked.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-semibold text-destructive">{agent.blockedCount}</p>
+                        <p className="text-xs text-muted-foreground">blocks</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );
