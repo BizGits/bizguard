@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap, Calendar, Award } from 'lucide-react';
+import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap, Calendar, Award, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -223,6 +223,40 @@ export default function Dashboard() {
       setIsCrossBrandLoading(false);
     }
   }, [isAdmin, crossBrandFilter]);
+
+  // Export cross-brand data to CSV
+  const exportCrossBrandCSV = () => {
+    if (crossBrandAgents.length === 0) return;
+
+    const headers = ['Rank', 'Agent Name', 'Total Blocks', 'Brands Blocked', 'Brand Names'];
+    const rows = crossBrandAgents.map((agent, index) => [
+      index + 1,
+      agent.userName,
+      agent.blockedCount,
+      agent.brandsBlocked.length,
+      agent.brandsBlocked.join('; '),
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cross-brand-blocks-${crossBrandFilter}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Export complete',
+      description: `Downloaded ${crossBrandAgents.length} agent records`,
+    });
+  };
 
   // Initial fetch
   useEffect(() => {
@@ -491,17 +525,29 @@ export default function Dashboard() {
                 <Award className="w-4 h-4 text-warning" />
                 Top Agents with Cross-Brand Blocks
               </CardTitle>
-              <Select value={crossBrandFilter} onValueChange={(v) => setCrossBrandFilter(v as DateFilter)}>
-                <SelectTrigger className="w-32 h-8 text-xs">
-                  <Calendar className="w-3 h-3 mr-1" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={crossBrandFilter} onValueChange={(v) => setCrossBrandFilter(v as DateFilter)}>
+                  <SelectTrigger className="w-32 h-8 text-xs">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="90d">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 gap-1"
+                  onClick={() => exportCrossBrandCSV()}
+                  disabled={crossBrandAgents.length === 0}
+                >
+                  <Download className="w-3 h-3" />
+                  CSV
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isCrossBrandLoading ? (
