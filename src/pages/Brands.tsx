@@ -10,6 +10,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { sanitizeDbError } from '@/lib/errorUtils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Brand {
   id: string;
@@ -30,6 +40,7 @@ export default function Brands() {
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingName, setEditingName] = useState('');
+  const [brandToDelete, setBrandToDelete] = useState<Brand | null>(null);
 
   useEffect(() => {
     if (!authLoading) {
@@ -98,6 +109,17 @@ export default function Brands() {
         .single();
 
       if (error) throw error;
+
+      // Log brand created event
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('events').insert({
+          user_id: user.id,
+          action: 'BRAND_CREATED',
+          brand_id: data.id,
+          term: trimmedName,
+        });
+      }
 
       const newBrand = { ...data, terms: [] };
       setBrands([...brands, newBrand]);
@@ -184,20 +206,33 @@ export default function Brands() {
     }
   };
 
-  const deleteBrand = async (brandId: string) => {
+  const deleteBrand = async (brand: Brand) => {
     try {
+      // Soft delete - set deleted_at timestamp
       const { error } = await supabase
         .from('brands')
-        .delete()
-        .eq('id', brandId);
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', brand.id);
 
       if (error) throw error;
 
-      setBrands(brands.filter(b => b.id !== brandId));
-      if (selectedBrand?.id === brandId) setSelectedBrand(null);
+      // Log brand deleted event
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('events').insert({
+          user_id: user.id,
+          action: 'BRAND_DELETED',
+          brand_id: brand.id,
+          term: brand.name,
+        });
+      }
+
+      setBrands(brands.filter(b => b.id !== brand.id));
+      if (selectedBrand?.id === brand.id) setSelectedBrand(null);
+      setBrandToDelete(null);
       toast({
         title: 'Brand deleted',
-        description: 'Brand has been removed',
+        description: `${brand.name} has been removed. You can restore it from the Events page.`,
       });
     } catch (error) {
       toast({
@@ -455,7 +490,7 @@ export default function Brands() {
                           <Button 
                             variant="destructive" 
                             size="sm"
-                            onClick={() => deleteBrand(selectedBrand.id)}
+                            onClick={() => setBrandToDelete(selectedBrand)}
                             className="hover:scale-[1.02] transition-transform"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
@@ -543,6 +578,28 @@ export default function Brands() {
           </Card>
         </div>
       </div>
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!brandToDelete} onOpenChange={(open) => !open && setBrandToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Brand</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{brandToDelete?.name}</strong>? 
+              This will remove the brand and all its terms from active use. 
+              You can restore it later from the Events page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => brandToDelete && deleteBrand(brandToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Brand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

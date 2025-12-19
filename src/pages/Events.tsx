@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Search, Calendar, Filter, X, Download } from 'lucide-react';
+import { Search, Calendar, Filter, X, Download, RotateCcw } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { toast } from '@/hooks/use-toast';
 import { formatDistanceToNow, format, subDays, startOfDay, endOfDay } from 'date-fns';
 import {
   Select,
@@ -28,8 +29,9 @@ interface Event {
   term: string | null;
   url: string | null;
   created_at: string;
+  brand_id: string | null;
   profiles?: { display_name: string } | null;
-  brands?: { name: string } | null;
+  brands?: { name: string; deleted_at: string | null } | null;
 }
 
 type DateRange = {
@@ -43,6 +45,9 @@ const ACTION_COLORS: Record<string, string> = {
   TOGGLED_ON: 'bg-success/20 text-success border-success/30',
   LOGIN: 'bg-info/20 text-info border-info/30',
   LOGOUT: 'bg-muted text-muted-foreground border-border',
+  BRAND_CREATED: 'bg-success/20 text-success border-success/30',
+  BRAND_DELETED: 'bg-destructive/20 text-destructive border-destructive/30',
+  BRAND_RESTORED: 'bg-info/20 text-info border-info/30',
 };
 
 export default function Events() {
@@ -76,8 +81,9 @@ export default function Events() {
           term,
           url,
           created_at,
+          brand_id,
           profiles:user_id (display_name),
-          brands:brand_id (name)
+          brands:brand_id (name, deleted_at)
         `)
         .order('created_at', { ascending: false });
 
@@ -124,6 +130,43 @@ export default function Events() {
     setSearchQuery('');
     setActionFilter('all');
     setDateRange({ from: subDays(new Date(), 7), to: new Date() });
+  };
+
+  const restoreBrand = async (event: Event) => {
+    if (!event.brand_id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('brands')
+        .update({ deleted_at: null })
+        .eq('id', event.brand_id);
+
+      if (error) throw error;
+
+      // Log brand restored event
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('events').insert({
+          user_id: user.id,
+          action: 'BRAND_RESTORED',
+          brand_id: event.brand_id,
+          term: event.term,
+        });
+      }
+
+      toast({
+        title: 'Brand restored',
+        description: `${event.term || 'Brand'} has been restored`,
+      });
+      
+      fetchEvents();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to restore brand',
+        variant: 'destructive',
+      });
+    }
   };
 
   const exportToCSV = () => {
@@ -189,6 +232,9 @@ export default function Events() {
                   <SelectItem value="BLOCKED">Blocked</SelectItem>
                   <SelectItem value="TOGGLED_ON">Toggled On</SelectItem>
                   <SelectItem value="TOGGLED_OFF">Toggled Off</SelectItem>
+                  <SelectItem value="BRAND_CREATED">Brand Created</SelectItem>
+                  <SelectItem value="BRAND_DELETED">Brand Deleted</SelectItem>
+                  <SelectItem value="BRAND_RESTORED">Brand Restored</SelectItem>
                   <SelectItem value="LOGIN">Login</SelectItem>
                   <SelectItem value="LOGOUT">Logout</SelectItem>
                 </SelectContent>
@@ -274,11 +320,14 @@ export default function Events() {
                           ACTION_COLORS[event.action] || 'bg-accent text-foreground'
                         )}
                       >
-                        {event.action}
+                        {event.action.replace('_', ' ')}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">
                           {event.term || event.brands?.name || 'System event'}
+                          {event.action === 'BRAND_DELETED' && event.brands?.deleted_at && (
+                            <span className="ml-2 text-xs text-destructive">(deleted)</span>
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
                           {event.profiles?.display_name || 'Unknown user'}
@@ -288,13 +337,26 @@ export default function Events() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-xs text-muted-foreground whitespace-nowrap pl-16 sm:pl-0">
-                      <span className="hidden sm:inline">
-                        {format(new Date(event.created_at), 'MMM d, HH:mm')}
-                      </span>
-                      <span className="sm:hidden">
-                        {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
-                      </span>
+                    <div className="flex items-center gap-3 pl-16 sm:pl-0">
+                      {event.action === 'BRAND_DELETED' && event.brands?.deleted_at && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => restoreBrand(event)}
+                          className="gap-1 text-xs"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Restore
+                        </Button>
+                      )}
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
+                        <span className="hidden sm:inline">
+                          {format(new Date(event.created_at), 'MMM d, HH:mm')}
+                        </span>
+                        <span className="sm:hidden">
+                          {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
