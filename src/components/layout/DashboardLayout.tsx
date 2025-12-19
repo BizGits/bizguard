@@ -68,10 +68,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Desktop notification bell */}
-        <div className="hidden lg:flex absolute top-4 right-[-56px] z-50">
-          <NotificationBell />
-        </div>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-glass-border/20">
@@ -159,6 +155,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-screen">
+        {/* Desktop header */}
+        <header className="hidden lg:flex glass border-b border-glass-border/20 px-6 py-3 sticky top-0 z-30">
+          <div className="flex items-center justify-end w-full">
+            <NotificationBell />
+          </div>
+        </header>
+
         {/* Mobile header */}
         <header className="lg:hidden glass border-b border-glass-border/20 px-4 py-3 sticky top-0 z-30">
           <div className="flex items-center justify-between">

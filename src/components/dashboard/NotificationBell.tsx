@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,17 +45,41 @@ const ACTION_COLORS: Record<string, string> = {
   BRAND_RESTORED: 'bg-info',
 };
 
+// Simple notification sound using Web Audio API
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+  } catch (e) {
+    console.log('Audio not available');
+  }
+};
+
 export function NotificationBell() {
   const { isAdmin } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const isFirstLoad = useRef(true);
   const [lastReadTime, setLastReadTime] = useState<Date>(() => {
     const stored = localStorage.getItem('lastNotificationRead');
     return stored ? new Date(stored) : new Date();
   });
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async (playSound = false) => {
     const { data, error } = await supabase
       .from('events')
       .select(`
@@ -76,11 +100,17 @@ export function NotificationBell() {
         (n) => new Date(n.created_at) > lastReadTime
       ).length;
       setUnreadCount(newCount);
+      
+      // Play sound only for new events (not on initial load)
+      if (playSound && newCount > 0) {
+        playNotificationSound();
+      }
     }
-  };
+  }, [lastReadTime]);
 
   useEffect(() => {
-    fetchNotifications();
+    fetchNotifications(false);
+    isFirstLoad.current = false;
 
     // Real-time subscription
     const channel = supabase
@@ -93,7 +123,7 @@ export function NotificationBell() {
           table: 'events',
         },
         () => {
-          fetchNotifications();
+          fetchNotifications(true);
         }
       )
       .subscribe();
@@ -101,7 +131,7 @@ export function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [lastReadTime]);
+  }, [fetchNotifications]);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
