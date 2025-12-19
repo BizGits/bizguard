@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Loader2, Download, Globe, Info, Lock } from 'lucide-react';
+import { Loader2, Download, Globe, Info, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+import { validatePassword } from '@/lib/downloadPassword';
 import logo from '@/assets/logo.png';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -17,6 +19,8 @@ export default function Auth() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [downloadEmail, setDownloadEmail] = useState<string | null>(null);
   const [isDownloadAuthorized, setIsDownloadAuthorized] = useState(false);
+  const [downloadPassword, setDownloadPassword] = useState('');
+  const [isValidatingPassword, setIsValidatingPassword] = useState(false);
 
   // Handle Azure AD callback
   useEffect(() => {
@@ -155,15 +159,6 @@ export default function Auth() {
   };
 
   const handleDownload = () => {
-    if (!isDownloadAuthorized && !user) {
-      toast({
-        title: 'Sign in Required',
-        description: `Please sign in with a @${ALLOWED_DOMAIN} Microsoft account to download.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
     const downloadUrl = `${SUPABASE_URL}/functions/v1/extension-download`;
     const link = document.createElement('a');
     link.href = downloadUrl;
@@ -176,6 +171,34 @@ export default function Auth() {
       title: 'Download started',
       description: 'Your extension is downloading. Follow the steps to install.',
     });
+  };
+
+  const handlePasswordDownload = async () => {
+    if (!downloadPassword.trim()) {
+      toast({
+        title: 'Password Required',
+        description: 'Please enter the download password.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsValidatingPassword(true);
+    try {
+      const isValid = await validatePassword(downloadPassword);
+      if (isValid) {
+        handleDownload();
+        setDownloadPassword('');
+      } else {
+        toast({
+          title: 'Invalid Password',
+          description: 'The password is incorrect or has expired. Please get a new password from your dashboard admin.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsValidatingPassword(false);
+    }
   };
 
   if (isLoading) {
@@ -249,7 +272,7 @@ export default function Auth() {
             <div className="text-center mb-6">
               <h2 className="text-xl font-semibold text-slate-50">Download BizGuard Extension</h2>
               <p className="text-slate-300 text-sm mt-2">
-                Sign in with your @{ALLOWED_DOMAIN} Microsoft account to download the extension.
+                Enter the download password from your admin to get the extension.
               </p>
             </div>
 
@@ -272,33 +295,36 @@ export default function Auth() {
               </>
             ) : (
               <>
-                {/* Not Authorized - Show Sign In Button */}
+                {/* Password-based download */}
                 <div className="bg-slate-800/50 border border-white/10 rounded-xl p-4 mb-4">
-                  <div className="flex items-center gap-3 justify-center text-slate-400">
-                    <Lock className="w-5 h-5" />
-                    <p className="text-sm">Sign in required to download</p>
+                  <div className="flex items-center gap-2 mb-3 justify-center text-slate-300">
+                    <Key className="w-4 h-4" />
+                    <p className="text-sm font-medium">Enter download password</p>
                   </div>
+                  <Input
+                    type="text"
+                    placeholder="XXXX-XXXX"
+                    value={downloadPassword}
+                    onChange={(e) => setDownloadPassword(e.target.value.toUpperCase())}
+                    className="text-center font-mono text-lg tracking-widest bg-slate-900/50 border-white/10 mb-3"
+                    maxLength={9}
+                  />
+                  <p className="text-xs text-slate-500 text-center">
+                    Get the password from your dashboard admin
+                  </p>
                 </div>
                 <Button
                   className="w-full h-12 text-base rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:scale-[1.02] transition-all mb-4"
-                  onClick={() => handleMicrosoftSignIn(true)}
-                  disabled={isSigningIn}
+                  onClick={handlePasswordDownload}
+                  disabled={isValidatingPassword}
                 >
-                  {isSigningIn ? (
+                  {isValidatingPassword ? (
                     <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   ) : (
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
-                      <path d="M0 0h10v10H0V0z" fill="#F25022"/>
-                      <path d="M11 0h10v10H11V0z" fill="#7FBA00"/>
-                      <path d="M0 11h10v10H0V11z" fill="#00A4EF"/>
-                      <path d="M11 11h10v10H11V11z" fill="#FFB900"/>
-                    </svg>
+                    <Download className="w-5 h-5 mr-2" />
                   )}
-                  Sign in to Download
+                  Download Extension
                 </Button>
-                <p className="text-xs text-slate-500 text-center mb-4">
-                  Only @{ALLOWED_DOMAIN} accounts can download
-                </p>
               </>
             )}
 
