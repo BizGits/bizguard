@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { Users, Shield, AlertTriangle, Activity, TrendingUp, ArrowRight, Zap, Calendar, Award, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { formatDistanceToNow, subDays, subMonths, format } from 'date-fns';
+import { formatDistanceToNow, subDays, format, eachDayOfInterval } from 'date-fns';
 import { BlockingChart } from '@/components/dashboard/BlockingChart';
 import { ActionPieChart } from '@/components/dashboard/ActionPieChart';
 import { toast } from '@/hooks/use-toast';
@@ -18,6 +18,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface StatsCard {
   title: string;
@@ -55,6 +64,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [crossBrandAgents, setCrossBrandAgents] = useState<CrossBrandAgent[]>([]);
+  const [crossBrandTrend, setCrossBrandTrend] = useState<{ date: string; blocks: number; uniqueAgents: number }[]>([]);
   const [crossBrandFilter, setCrossBrandFilter] = useState<DateFilter>('30d');
   const [isCrossBrandLoading, setIsCrossBrandLoading] = useState(false);
 
@@ -176,23 +186,30 @@ export default function Dashboard() {
         .select(`
           user_id,
           brand_id,
+          created_at,
           profiles:user_id (display_name),
           brands:brand_id (name)
         `)
         .eq('action', 'BLOCKED')
         .not('brand_id', 'is', null)
-        .gte('created_at', startDate.toISOString());
+        .gte('created_at', startDate.toISOString())
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
 
       // Group by user and count unique brands
       const userMap = new Map<string, { userName: string; brands: Set<string>; count: number }>();
       
+      // Group by date for trend data
+      const dateMap = new Map<string, { blocks: number; agents: Set<string> }>();
+      
       (data || []).forEach((event: any) => {
         const userId = event.user_id;
         const userName = event.profiles?.display_name || 'Unknown';
         const brandName = event.brands?.name;
+        const dateKey = format(new Date(event.created_at), 'yyyy-MM-dd');
 
+        // User stats
         if (!userMap.has(userId)) {
           userMap.set(userId, { userName, brands: new Set(), count: 0 });
         }
@@ -202,6 +219,14 @@ export default function Dashboard() {
         if (brandName) {
           userData.brands.add(brandName);
         }
+
+        // Date trend stats
+        if (!dateMap.has(dateKey)) {
+          dateMap.set(dateKey, { blocks: 0, agents: new Set() });
+        }
+        const dateData = dateMap.get(dateKey)!;
+        dateData.blocks++;
+        dateData.agents.add(userId);
       });
 
       // Filter to only users with multiple brands blocked (cross-brand)
@@ -216,7 +241,20 @@ export default function Dashboard() {
         .sort((a, b) => b.blockedCount - a.blockedCount)
         .slice(0, 10);
 
+      // Generate trend data for all days in range
+      const allDays = eachDayOfInterval({ start: startDate, end: new Date() });
+      const trendData = allDays.map(day => {
+        const dateKey = format(day, 'yyyy-MM-dd');
+        const dayData = dateMap.get(dateKey);
+        return {
+          date: format(day, crossBrandFilter === '7d' ? 'EEE' : 'MMM d'),
+          blocks: dayData?.blocks || 0,
+          uniqueAgents: dayData?.agents.size || 0,
+        };
+      });
+
       setCrossBrandAgents(crossBrandData);
+      setCrossBrandTrend(trendData);
     } catch (error) {
       console.error('Error fetching cross-brand agents:', error);
     } finally {
@@ -517,14 +555,20 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Cross-Brand Blocking Agents */}
+        {/* Cross-Brand Blocking Section */}
         {isAdmin && (
-          <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '400ms' }}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Award className="w-4 h-4 text-warning" />
-                Top Agents with Cross-Brand Blocks
-              </CardTitle>
+          <div className="space-y-6">
+            {/* Section Header with controls */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Award className="w-5 h-5 text-warning" />
+                  Cross-Brand Blocking Analysis
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Agents blocking multiple brands in the selected period
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <Select value={crossBrandFilter} onValueChange={(v) => setCrossBrandFilter(v as DateFilter)}>
                   <SelectTrigger className="w-32 h-8 text-xs">
@@ -548,57 +592,147 @@ export default function Dashboard() {
                   CSV
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {isCrossBrandLoading ? (
-                <div className="h-[150px] flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : crossBrandAgents.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No agents with cross-brand blocks in this period
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {crossBrandAgents.map((agent, index) => (
-                    <div 
-                      key={agent.userId} 
-                      className="flex items-center justify-between p-3 rounded-xl bg-accent/30 hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">
-                          <span className="text-xs font-bold text-warning">
-                            #{index + 1}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {agent.userName}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {agent.brandsBlocked.slice(0, 3).map((brand) => (
-                              <Badge key={brand} variant="secondary" className="text-xs px-1.5 py-0">
-                                {brand}
-                              </Badge>
-                            ))}
-                            {agent.brandsBlocked.length > 3 && (
-                              <Badge variant="outline" className="text-xs px-1.5 py-0">
-                                +{agent.brandsBlocked.length - 3}
-                              </Badge>
-                            )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Trend Chart */}
+              <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Blocking Trend</CardTitle>
+                  <CardDescription>Daily blocks and unique agents over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isCrossBrandLoading ? (
+                    <div className="h-[250px] flex items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : crossBrandTrend.length === 0 ? (
+                    <div className="h-[250px] flex items-center justify-center">
+                      <p className="text-sm text-muted-foreground">No data available</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={crossBrandTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="blocksGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="agentsGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                          interval={crossBrandFilter === '90d' ? 13 : crossBrandFilter === '30d' ? 4 : 0}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="blocks" 
+                          name="Blocks"
+                          stroke="hsl(0, 72%, 51%)" 
+                          strokeWidth={2}
+                          fill="url(#blocksGradient)"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="uniqueAgents" 
+                          name="Unique Agents"
+                          stroke="hsl(217, 91%, 60%)" 
+                          strokeWidth={2}
+                          fill="url(#agentsGradient)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                  <div className="flex justify-center gap-6 mt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-destructive" />
+                      <span className="text-xs text-muted-foreground">Blocks</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-info" />
+                      <span className="text-xs text-muted-foreground">Unique Agents</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Agents List */}
+              <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '450ms' }}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Top Agents</CardTitle>
+                  <CardDescription>Agents with most cross-brand blocks</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isCrossBrandLoading ? (
+                    <div className="h-[250px] flex items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : crossBrandAgents.length === 0 ? (
+                    <div className="h-[250px] flex items-center justify-center">
+                      <p className="text-sm text-muted-foreground">No cross-brand blocks in this period</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                      {crossBrandAgents.map((agent, index) => (
+                        <div 
+                          key={agent.userId} 
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-accent/30 hover:bg-accent/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-warning/20 flex items-center justify-center">
+                              <span className="text-xs font-bold text-warning">
+                                #{index + 1}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {agent.userName}
+                              </p>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {agent.brandsBlocked.slice(0, 2).map((brand) => (
+                                  <Badge key={brand} variant="secondary" className="text-[10px] px-1 py-0">
+                                    {brand}
+                                  </Badge>
+                                ))}
+                                {agent.brandsBlocked.length > 2 && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                    +{agent.brandsBlocked.length - 2}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-base font-semibold text-destructive">{agent.blockedCount}</p>
+                            <p className="text-[10px] text-muted-foreground">blocks</p>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-semibold text-destructive">{agent.blockedCount}</p>
-                        <p className="text-xs text-muted-foreground">blocks</p>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
