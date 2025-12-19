@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo.png';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
 interface NavItem {
   label: string;
@@ -67,6 +68,10 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
+        {/* Desktop notification bell */}
+        <div className="hidden lg:flex absolute top-4 right-[-56px] z-50">
+          <NotificationBell />
+        </div>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-glass-border/20">
@@ -168,7 +173,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               <img src={logo} alt="BizGuard" className="w-8 h-8 object-contain" />
               <span className="font-semibold">BizGuard</span>
             </div>
-            <div className="w-10" /> {/* Spacer */}
+            <NotificationBell />
           </div>
         </header>
 
