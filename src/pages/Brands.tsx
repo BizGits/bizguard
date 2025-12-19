@@ -65,6 +65,7 @@ export default function Brands() {
           is_active,
           brand_terms (id, term)
         `)
+        .is('deleted_at', null)
         .order('name');
 
       if (error) throw error;
