@@ -12,13 +12,20 @@ import {
   Settings,
   FileBarChart,
   Puzzle,
-  UserPlus
+  UserPlus,
+  Key
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo.png';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
+import { DownloadPasswordCard } from '@/components/dashboard/DownloadPasswordCard';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface NavItem {
   label: string;
@@ -119,6 +126,23 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+
+            {/* Access Password - Admin only */}
+            {isAdmin && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group w-full text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  >
+                    <Key className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    Access Password
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md p-0 border-0 bg-transparent">
+                  <DownloadPasswordCard />
+                </DialogContent>
+              </Dialog>
+            )}
           </nav>
 
           {/* User section */}

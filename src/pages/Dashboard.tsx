@@ -9,7 +9,6 @@ import { useAuth } from '@/lib/auth';
 import { formatDistanceToNow, subDays, format, eachDayOfInterval } from 'date-fns';
 import { BlockingChart } from '@/components/dashboard/BlockingChart';
 import { ActionPieChart } from '@/components/dashboard/ActionPieChart';
-import { DownloadPasswordCard } from '@/components/dashboard/DownloadPasswordCard';
 import { toast } from '@/hooks/use-toast';
 import {
   Select,
@@ -427,13 +426,6 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
-
-        {/* Download Password Card - Admin only */}
-        {isAdmin && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <DownloadPasswordCard />
-          </div>
-        )}
 
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
