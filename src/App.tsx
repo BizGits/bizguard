@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import Extensions from "./pages/Extensions";
 import Invitations from "./pages/Invitations";
+import AccessPassword from "./pages/AccessPassword";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/dashboard/extensions" element={<ProtectedRoute><Extensions /></ProtectedRoute>} />
             <Route path="/dashboard/invitations" element={<ProtectedRoute><Invitations /></ProtectedRoute>} />
+            <Route path="/dashboard/access-password" element={<ProtectedRoute><AccessPassword /></ProtectedRoute>} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
