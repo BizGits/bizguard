@@ -29,9 +29,14 @@ A Chrome/Edge extension that protects brands by detecting cross-brand term usage
 
 ### Azure AD Setup (for Microsoft auth)
 
-1. Register an app in Azure AD
-2. Add redirect URI: `https://<extension-id>.chromiumapp.org/`
-3. Update `manifest.json` with your client ID
+The extension uses a web-based redirect for Azure AD authentication, which means you only need to configure ONE redirect URI in Azure AD, regardless of how many users download the extension.
+
+1. Register an app in Azure AD (or use existing)
+2. Add redirect URI: `https://bizguard.bizcuits.io/extension-auth?action=callback`
+   - This is a **Web** platform redirect URI, not SPA
+3. No need to add extension-specific redirect URIs anymore!
+
+This approach eliminates the need to configure browser redirect URIs for each extension installation.
 
 ### API Endpoints
 

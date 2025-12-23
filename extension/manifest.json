@@ -6,17 +6,17 @@
   "permissions": [
     "storage",
     "activeTab",
-    "alarms",
-    "identity"
+    "alarms"
   ],
   "host_permissions": [
     "https://livbbxegwifbhtboyczy.supabase.co/*",
-    "https://login.microsoftonline.com/*",
-    "https://graph.microsoft.com/*",
     "https://*.zendesk.com/*",
     "https://*.freshdesk.com/*",
     "https://*.intercom.io/*",
-    "https://*.helpscout.net/*"
+    "https://*.helpscout.net/*",
+    "https://bizguard.bizcuits.io/*",
+    "https://*.lovableproject.com/*",
+    "https://*.lovable.app/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -32,6 +32,15 @@
       ],
       "js": ["content.js"],
       "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://bizguard.bizcuits.io/*",
+        "https://*.lovableproject.com/*",
+        "https://*.lovable.app/*"
+      ],
+      "js": ["auth-listener.js"],
       "run_at": "document_idle"
     }
   ],
