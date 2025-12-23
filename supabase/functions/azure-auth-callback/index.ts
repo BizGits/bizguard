@@ -57,8 +57,11 @@ serve(async (req) => {
     const ALLOWED_PATTERNS = [
       /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
       /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
-      /^https:\/\/[a-z0-9]+\.chromiumapp\.org$/, // Chrome extension redirect
+      /^https:\/\/[a-z0-9]+\.chromiumapp\.org$/, // Chrome extension redirect (legacy)
     ];
+    
+    // Also allow paths like /extension-auth for web-based extension auth
+    const ALLOWED_PATHS = ['/extension-auth'];
 
     let validatedBaseUrl: string;
     let isExtensionAuth = false;
@@ -73,8 +76,9 @@ serve(async (req) => {
       });
       const isAllowedPattern = ALLOWED_PATTERNS.some(pattern => pattern.test(redirectUrl.origin));
       
-      // Check if this is a Chrome extension auth request
-      isExtensionAuth = /\.chromiumapp\.org$/.test(redirectUrl.origin);
+      // Check if this is a Chrome extension auth request (legacy) or web-based extension auth
+      isExtensionAuth = /\.chromiumapp\.org$/.test(redirectUrl.origin) || 
+                        ALLOWED_PATHS.some(path => redirectUrl.pathname.includes(path));
       
       if (!isAllowedOrigin && !isAllowedPattern) {
         console.error('Invalid redirect URI origin:', redirectUrl.origin);

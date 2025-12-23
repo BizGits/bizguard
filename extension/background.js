@@ -360,7 +360,7 @@ async function handleLogin(email, password) {
   }
 }
 
-// Handle Microsoft/Azure AD login
+// Handle Microsoft/Azure AD login via web redirect
 async function handleMicrosoftLogin() {
   const diagnostics = {
     startTime: new Date().toISOString(),
@@ -369,226 +369,115 @@ async function handleMicrosoftLogin() {
   };
 
   try {
-    // Generate PKCE code verifier and challenge
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    diagnostics.steps.push('Starting web-based login');
+    console.log('Starting Microsoft login via web redirect');
     
-    diagnostics.steps.push('PKCE generated');
-    console.log('Starting Microsoft login with PKCE');
+    // Web app URL for extension auth - use the deployed app or preview
+    const webAppUrl = 'https://bizguard.bizcuits.io'; // Update this to your deployed URL
+    const authUrl = `${webAppUrl}/extension-auth?action=init&extensionId=${chrome.runtime.id}`;
     
-    // Get Azure auth URL from our edge function
-    let initResponse;
-    try {
-      initResponse = await fetch(`${API_BASE}/azure-auth-init`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          redirectUri: chrome.identity.getRedirectURL(),
-          codeChallenge: codeChallenge
-        })
-      });
-    } catch (fetchError) {
-      diagnostics.errors.push(`Init fetch failed: ${fetchError.message}`);
-      return { success: false, error: 'Network error connecting to auth server', diagnostics };
-    }
+    diagnostics.steps.push('Opening auth popup');
+    console.log('Opening auth popup:', authUrl);
 
-    if (!initResponse.ok) {
-      const errorData = await initResponse.text();
-      diagnostics.errors.push(`Init response not ok: ${initResponse.status} - ${errorData}`);
-      return { success: false, error: 'Failed to initialize Azure login', diagnostics };
-    }
-
-    const { authUrl, state } = await initResponse.json();
-    diagnostics.steps.push('Got auth URL');
-    console.log('Got auth URL, launching web auth flow');
-
-    // Launch OAuth flow
-    let responseUrl;
-    try {
-      responseUrl = await new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow(
-          {
-            url: authUrl,
-            interactive: true
-          },
-          (redirectUrl) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve(redirectUrl);
-            }
-          }
-        );
-      });
-      diagnostics.steps.push('Web auth flow completed');
-    } catch (authFlowError) {
-      diagnostics.errors.push(`Web auth flow error: ${authFlowError.message}`);
-      return { success: false, error: `Authentication window error: ${authFlowError.message}`, diagnostics };
-    }
-
-    console.log('Web auth flow completed');
-
-    // Extract authorization code from redirect URL
-    const url = new URL(responseUrl);
-    const code = url.searchParams.get('code');
-    const error = url.searchParams.get('error');
-
-    if (error) {
-      const errorDesc = url.searchParams.get('error_description') || error;
-      diagnostics.errors.push(`Azure error: ${errorDesc}`);
-      return { success: false, error: errorDesc, diagnostics };
-    }
-
-    if (!code) {
-      diagnostics.errors.push('No authorization code in redirect URL');
-      return { success: false, error: 'No authorization code received', diagnostics };
-    }
-
-    diagnostics.steps.push('Got authorization code');
-    console.log('Got authorization code, exchanging for session');
-
-    // Exchange code for session via our edge function with PKCE verifier
-    let callbackResponse;
-    let callbackData;
-    try {
-      callbackResponse = await fetch(`${API_BASE}/azure-auth-callback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code,
-          redirectUri: chrome.identity.getRedirectURL(),
-          codeVerifier: codeVerifier
-        })
-      });
-
-      callbackData = await callbackResponse.json();
-      diagnostics.steps.push('Callback response received');
-      diagnostics.callbackKeys = Object.keys(callbackData);
-    } catch (callbackError) {
-      diagnostics.errors.push(`Callback fetch failed: ${callbackError.message}`);
-      return { success: false, error: 'Failed to complete authentication with server', diagnostics };
-    }
-
-    if (!callbackResponse.ok || callbackData.error) {
-      diagnostics.errors.push(`Callback error: ${callbackData.message || callbackData.error}`);
-      return { success: false, error: callbackData.message || callbackData.error || 'Authentication failed', diagnostics };
-    }
-
-    console.log('Got callback response:', { 
-      hasEmail: !!callbackData.email, 
-      hasMagicLink: !!callbackData.magicLink,
-      hasTokenHash: !!callbackData.tokenHash,
-      hasUserData: !!callbackData.userData
+    // Open a popup window for authentication
+    const authWindow = await chrome.windows.create({
+      url: authUrl,
+      type: 'popup',
+      width: 500,
+      height: 700,
+      focused: true
     });
 
-    // Extract user profile from callback data - this is the critical part
-    // Server already verified the user via Azure AD, so we trust this data
-    if (callbackData.userData) {
-      userProfile = {
-        id: callbackData.userData.id,
-        email: callbackData.userData.email,
-        displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0]
-      };
-      diagnostics.steps.push('User profile set from userData');
-    } else if (callbackData.email) {
-      userProfile = {
-        id: callbackData.userId,
-        email: callbackData.email,
-        displayName: callbackData.displayName || callbackData.email.split('@')[0]
-      };
-      diagnostics.steps.push('User profile set from email fields');
-    } else {
-      diagnostics.errors.push('No user data in callback response');
-      return { success: false, error: 'No user data received from server', diagnostics };
-    }
+    diagnostics.steps.push('Auth popup opened');
 
-    // At this point we have a valid user profile from the server
-    // Token verification is optional - we'll try but won't fail if it doesn't work
-    let tokenObtained = false;
-    let connectionMode = 'limited';
-    
-    // Try token hash verification first (most reliable)
-    if (callbackData.tokenHash) {
-      try {
-        const verifyResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify?token=${callbackData.tokenHash}&type=magiclink`, {
-          method: 'GET',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY
-          },
-          redirect: 'manual'
-        });
+    // Listen for the popup to close or for auth data
+    return new Promise((resolve) => {
+      let resolved = false;
+      let checkInterval;
+      
+      // Poll localStorage in the auth window for the result
+      const checkForAuthData = async () => {
+        if (resolved) return;
         
-        if (verifyResponse.status === 303 || verifyResponse.status === 302) {
-          const location = verifyResponse.headers.get('location');
-          if (location) {
-            const redirectUrl = new URL(location);
-            const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
-            const accessToken = hashParams.get('access_token');
+        try {
+          // Try to get auth data from the extension's storage
+          // The web page will communicate via a content script or the popup closing
+          const result = await chrome.storage.local.get(['pendingAuthData']);
+          
+          if (result.pendingAuthData) {
+            resolved = true;
+            clearInterval(checkInterval);
             
-            if (accessToken) {
-              authToken = accessToken;
-              tokenObtained = true;
-              connectionMode = 'connected';
-              diagnostics.steps.push('Token obtained from hash verification');
-              console.log('Access token obtained from token hash verification');
+            const authData = result.pendingAuthData;
+            await chrome.storage.local.remove(['pendingAuthData']);
+            
+            if (authData.success) {
+              authToken = authData.authToken || null;
+              userProfile = authData.userData;
+              
+              await saveState();
+              
+              if (authToken) {
+                try {
+                  await updateExtensionStatus(isEnabled);
+                  await logEvent('LOGIN');
+                } catch (apiError) {
+                  console.log('API call note:', apiError.message);
+                }
+              }
+              
+              diagnostics.steps.push('Login complete');
+              resolve({ 
+                success: true, 
+                user: userProfile, 
+                mode: authToken ? 'connected' : 'limited',
+                diagnostics 
+              });
+            } else {
+              diagnostics.errors.push(authData.error || 'Unknown error');
+              resolve({ success: false, error: authData.error || 'Authentication failed', diagnostics });
             }
           }
-        } else {
-          diagnostics.steps.push(`Token hash verify status: ${verifyResponse.status}`);
+        } catch (e) {
+          // Ignore errors during polling
         }
-      } catch (verifyError) {
-        diagnostics.steps.push(`Token hash verify error: ${verifyError.message}`);
-        console.warn('Token hash verification failed:', verifyError);
-      }
-    }
-    
-    // Fallback: Try magic link verification
-    if (!tokenObtained && callbackData.magicLink) {
-      try {
-        const { access_token } = await verifyMagicLink(callbackData.magicLink);
-        if (access_token) {
-          authToken = access_token;
-          tokenObtained = true;
-          connectionMode = 'connected';
-          diagnostics.steps.push('Token obtained from magic link');
-          console.log('Access token obtained from magic link verification');
+      };
+
+      // Check periodically for auth data
+      checkInterval = setInterval(checkForAuthData, 500);
+
+      // Also listen for window close
+      const windowCloseListener = (windowId) => {
+        if (windowId === authWindow.id && !resolved) {
+          // Window was closed, check one more time for auth data
+          setTimeout(async () => {
+            if (resolved) return;
+            
+            await checkForAuthData();
+            
+            if (!resolved) {
+              resolved = true;
+              clearInterval(checkInterval);
+              diagnostics.errors.push('Auth window closed without completing');
+              resolve({ success: false, error: 'Authentication cancelled', diagnostics });
+            }
+          }, 500);
         }
-      } catch (verifyError) {
-        diagnostics.steps.push(`Magic link verify error: ${verifyError.message}`);
-        console.warn('Magic link verification failed:', verifyError);
-      }
-    }
+      };
 
-    // Save state - we have a valid user profile regardless of token status
-    await saveState();
-    diagnostics.steps.push('State saved');
-    
-    // If we have a token, register status and log event
-    if (authToken) {
-      try {
-        await updateExtensionStatus(isEnabled);
-        await logEvent('LOGIN');
-        diagnostics.steps.push('Status and login event logged');
-      } catch (apiError) {
-        diagnostics.steps.push(`API call error: ${apiError.message}`);
-      }
-    }
+      chrome.windows.onRemoved.addListener(windowCloseListener);
 
-    diagnostics.endTime = new Date().toISOString();
-    diagnostics.steps.push(`Login complete - mode: ${connectionMode}`);
-    console.log('Microsoft login successful:', userProfile?.email, 'Token:', tokenObtained ? 'Yes' : 'Limited mode');
-
-    // SUCCESS! Return user data even if we don't have a token (limited mode)
-    return { 
-      success: true, 
-      user: userProfile, 
-      mode: connectionMode,
-      diagnostics 
-    };
+      // Cleanup after timeout (2 minutes)
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearInterval(checkInterval);
+          chrome.windows.onRemoved.removeListener(windowCloseListener);
+          diagnostics.errors.push('Authentication timeout');
+          resolve({ success: false, error: 'Authentication timeout', diagnostics });
+        }
+      }, 120000);
+    });
   } catch (error) {
     diagnostics.errors.push(`Unexpected error: ${error.message}`);
     diagnostics.stack = error.stack;
