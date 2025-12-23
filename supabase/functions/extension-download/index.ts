@@ -1188,7 +1188,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="bizguard-extension-v5.9.0.zip"',
+        'Content-Disposition': 'attachment; filename="bizguard-extension-v6.0.0.zip"',
         'Cache-Control': 'no-store, max-age=0',
         Pragma: 'no-cache',
       },

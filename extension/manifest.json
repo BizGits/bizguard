@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.6.0",
+  "version": "6.0.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
   "permissions": [
     "storage",
