@@ -157,34 +157,42 @@ function adler32(data: Uint8Array): number {
 const manifestJson = `{
   "manifest_version": 3,
   "name": "BizGuard",
-  "version": "5.9.0",
+  "version": "6.0.0",
   "description": "Protect your brand by detecting cross-brand term usage in real-time",
-  "permissions": ["storage", "activeTab", "alarms", "identity", "scripting", "tabs"],
+  "permissions": ["storage", "activeTab", "alarms", "scripting", "tabs"],
   "host_permissions": [
     "${SUPABASE_URL}/*",
-    "https://login.microsoftonline.com/*",
-    "https://graph.microsoft.com/*",
     "https://app.helpdesk.com/*",
     "https://my.livechatinc.com/*",
     "https://www.text.com/*",
-    "https://text.com/*"
+    "https://text.com/*",
+    "https://bizguard.bizcuits.io/*"
   ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-  "content_scripts": [{
-    "matches": [
-      "https://app.helpdesk.com/*",
-      "https://my.livechatinc.com/*",
-      "https://www.text.com/app/inbox/*",
-      "https://text.com/app/inbox/*"
-    ],
-    "js": ["content.js"],
-    "css": ["content.css"],
-    "run_at": "document_idle",
-    "all_frames": true
-  }],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://app.helpdesk.com/*",
+        "https://my.livechatinc.com/*",
+        "https://www.text.com/app/inbox/*",
+        "https://text.com/app/inbox/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://bizguard.bizcuits.io/*"
+      ],
+      "js": ["auth-listener.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -202,7 +210,7 @@ const manifestJson = `{
   }
 }`;
 
-const backgroundJs = `// BizGuard Background Service Worker v5.9.0
+const backgroundJs = `// BizGuard Background Service Worker v6.0.0
 const API_BASE = '${SUPABASE_URL}/functions/v1';
 const SUPABASE_URL = '${SUPABASE_URL}';
 const SUPABASE_ANON_KEY = '${SUPABASE_ANON_KEY}';
@@ -214,25 +222,6 @@ let authToken = null;
 let userProfile = null;
 let stateLoaded = false;
 
-function generateCodeVerifier() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
-    .replace(/\\+/g, '-')
-    .replace(/\\//g, '_')
-    .replace(/=+$/, '');
-}
-
-async function generateCodeChallenge(verifier) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\\+/g, '-')
-    .replace(/\\//g, '_')
-    .replace(/=+$/, '');
-}
-
 async function ensureStateLoaded() {
   if (!stateLoaded) {
     await loadState();
@@ -240,11 +229,10 @@ async function ensureStateLoaded() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BizGuard v5.9.0 installed');
+  console.log('BizGuard v6.0.0 installed');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
-  // Send heartbeat immediately on install to set extension_active status
   if (authToken) {
     console.log('Auth token found, sending install heartbeat');
     await sendHeartbeat();
@@ -252,11 +240,10 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('BizGuard v5.9.0 starting up...');
+  console.log('BizGuard v6.0.0 starting up...');
   await loadState();
   await fetchBrands();
   setupHeartbeat();
-  // Send heartbeat immediately on startup to restore extension_active status
   if (authToken) {
     console.log('Auth token found, sending startup heartbeat');
     await sendHeartbeat();
@@ -388,222 +375,126 @@ async function handleMessage(message, sender) {
 
 async function handleMicrosoftLogin() {
   const diagnostics = { startTime: new Date().toISOString(), steps: [], errors: [] };
-  
+
   try {
-    const redirectUri = chrome.identity.getRedirectURL();
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    diagnostics.steps.push('Starting web-based login');
+    console.log('Starting Microsoft login via web redirect');
     
-    diagnostics.steps.push('PKCE generated');
-    console.log('Starting Microsoft login with PKCE...');
-    console.log('Redirect URI:', redirectUri);
+    const webAppUrl = 'https://bizguard.bizcuits.io';
+    const authUrl = webAppUrl + '/extension-auth?action=init&extensionId=' + chrome.runtime.id;
     
-    let initResponse;
-    try {
-      initResponse = await fetch(API_BASE + '/azure-auth-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ redirectUri, codeChallenge })
-      });
-    } catch (e) {
-      diagnostics.errors.push('Init fetch failed: ' + e.message);
-      return { success: false, error: 'Network error', diagnostics };
-    }
+    diagnostics.steps.push('Opening auth popup');
+    console.log('Opening auth popup:', authUrl);
 
-    if (!initResponse.ok) {
-      diagnostics.errors.push('Init not ok: ' + initResponse.status);
-      return { success: false, error: 'Failed to initialize Azure login', diagnostics };
-    }
-    
-    const { authUrl } = await initResponse.json();
-    diagnostics.steps.push('Got auth URL');
+    const authWindow = await chrome.windows.create({
+      url: authUrl,
+      type: 'popup',
+      width: 500,
+      height: 700,
+      focused: true
+    });
 
-    let responseUrl;
-    try {
-      responseUrl = await new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (redirectUrl) => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else resolve(redirectUrl);
-        });
-      });
-      diagnostics.steps.push('Web auth flow completed');
-    } catch (e) {
-      diagnostics.errors.push('Auth flow error: ' + e.message);
-      return { success: false, error: e.message, diagnostics };
-    }
+    diagnostics.steps.push('Auth popup opened');
 
-    const url = new URL(responseUrl);
-    const code = url.searchParams.get('code');
-    const error = url.searchParams.get('error');
-
-    if (error) {
-      diagnostics.errors.push('Azure error: ' + error);
-      return { success: false, error: url.searchParams.get('error_description') || error, diagnostics };
-    }
-    if (!code) {
-      diagnostics.errors.push('No code received');
-      return { success: false, error: 'No authorization code received', diagnostics };
-    }
-    
-    diagnostics.steps.push('Got authorization code');
-
-    let callbackData;
-    try {
-      const callbackResponse = await fetch(API_BASE + '/azure-auth-callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, redirectUri, codeVerifier })
-      });
-      callbackData = await callbackResponse.json();
-      diagnostics.steps.push('Callback received');
-      diagnostics.callbackKeys = Object.keys(callbackData);
+    return new Promise((resolve) => {
+      let resolved = false;
+      let checkInterval;
       
-      if (!callbackResponse.ok || callbackData.error) {
-        diagnostics.errors.push('Callback error: ' + (callbackData.message || callbackData.error));
-        return { success: false, error: callbackData.message || callbackData.error || 'Authentication failed', diagnostics };
-      }
-    } catch (e) {
-      diagnostics.errors.push('Callback fetch failed: ' + e.message);
-      return { success: false, error: 'Failed to complete authentication', diagnostics };
-    }
-
-    if (callbackData.userData) {
-      userProfile = { id: callbackData.userData.id, email: callbackData.userData.email, displayName: callbackData.userData.displayName || callbackData.userData.email.split('@')[0] };
-      diagnostics.steps.push('User profile from userData');
-    } else if (callbackData.email) {
-      userProfile = { id: callbackData.userId, email: callbackData.email, displayName: callbackData.displayName || callbackData.email.split('@')[0] };
-      diagnostics.steps.push('User profile from email');
-    } else {
-      diagnostics.errors.push('No user data in response');
-      return { success: false, error: 'No user data received', diagnostics };
-    }
-
-    const email = (userProfile.email || '').toLowerCase();
-    if (!email.endsWith('@bizcuits.io')) {
-      diagnostics.errors.push('Invalid domain: ' + email);
-      userProfile = null;
-      return { success: false, error: 'Only @bizcuits.io accounts are allowed', diagnostics };
-    }
-
-    let tokenObtained = false;
-    let connectionMode = 'limited';
-    
-    // First, check if callback returned a direct authToken (preferred method)
-    if (callbackData.authToken) {
-      authToken = callbackData.authToken;
-      tokenObtained = true;
-      connectionMode = 'connected';
-      diagnostics.steps.push('Token from direct authToken');
-      console.log('Direct auth token received from callback');
-    }
-    
-    // Fallback: try tokenHash verification
-    if (!tokenObtained && callbackData.tokenHash) {
-      try {
-        const verifyResponse = await fetch(SUPABASE_URL + '/auth/v1/verify?token=' + callbackData.tokenHash + '&type=magiclink', {
-          method: 'GET',
-          headers: { 'apikey': SUPABASE_ANON_KEY },
-          redirect: 'manual'
-        });
+      const checkForAuthData = async () => {
+        if (resolved) return;
         
-        if (verifyResponse.status === 303 || verifyResponse.status === 302) {
-          const location = verifyResponse.headers.get('location');
-          if (location) {
-            const redirectUrl = new URL(location);
-            const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
-            const accessToken = hashParams.get('access_token');
-            if (accessToken) {
-              authToken = accessToken;
-              tokenObtained = true;
-              connectionMode = 'connected';
-              diagnostics.steps.push('Token from hash verify');
+        try {
+          const result = await chrome.storage.local.get(['pendingAuthData']);
+          
+          if (result.pendingAuthData) {
+            resolved = true;
+            clearInterval(checkInterval);
+            
+            const authData = result.pendingAuthData;
+            await chrome.storage.local.remove(['pendingAuthData']);
+            
+            if (authData.success) {
+              authToken = authData.authToken || null;
+              userProfile = authData.userData;
+              
+              await saveState();
+              
+              if (authToken) {
+                try {
+                  await sendHeartbeat();
+                  await logEvent('LOGIN', {});
+                } catch (apiError) {
+                  console.log('API call note:', apiError.message);
+                }
+              }
+              
+              diagnostics.steps.push('Login complete');
+              resolve({ 
+                success: true, 
+                user: userProfile, 
+                mode: authToken ? 'connected' : 'limited',
+                diagnostics 
+              });
+            } else {
+              diagnostics.errors.push(authData.error || 'Unknown error');
+              resolve({ success: false, error: authData.error || 'Authentication failed', diagnostics });
             }
           }
+        } catch (e) {
+          // Ignore errors during polling
         }
-      } catch (e) {
-        diagnostics.steps.push('Hash verify error: ' + e.message);
-      }
-    }
-    
-    // Fallback: try magic link verification
-    if (!tokenObtained && callbackData.magicLink) {
-      try {
-        const { access_token, user } = await verifyMagicLink(callbackData.magicLink);
-        if (access_token) {
-          authToken = access_token;
-          tokenObtained = true;
-          connectionMode = 'connected';
-          diagnostics.steps.push('Token from magic link');
+      };
+
+      checkInterval = setInterval(checkForAuthData, 500);
+
+      const windowCloseListener = (windowId) => {
+        if (authWindow && windowId === authWindow.id && !resolved) {
+          resolved = true;
+          clearInterval(checkInterval);
+          chrome.windows.onRemoved.removeListener(windowCloseListener);
+          
+          chrome.storage.local.get(['pendingAuthData']).then(result => {
+            if (result.pendingAuthData) {
+              const authData = result.pendingAuthData;
+              chrome.storage.local.remove(['pendingAuthData']);
+              
+              if (authData.success) {
+                authToken = authData.authToken || null;
+                userProfile = authData.userData;
+                saveState().then(() => {
+                  if (authToken) {
+                    sendHeartbeat();
+                    logEvent('LOGIN', {});
+                  }
+                });
+                resolve({ success: true, user: userProfile, mode: authToken ? 'connected' : 'limited', diagnostics });
+              } else {
+                resolve({ success: false, error: authData.error || 'Authentication failed', diagnostics });
+              }
+            } else {
+              diagnostics.errors.push('Window closed without auth data');
+              resolve({ success: false, error: 'Login cancelled', diagnostics });
+            }
+          });
         }
-      } catch (e) {
-        diagnostics.steps.push('Magic link error: ' + e.message);
-      }
-    }
-    
-    // Log final token status
-    console.log('Token obtained:', tokenObtained, 'Mode:', connectionMode, 'Has authToken:', !!authToken);
+      };
 
-    await saveState();
-    diagnostics.steps.push('State saved');
-    
-    // Send heartbeat immediately to set extension_active and browser info
-    if (authToken) {
-      try {
-        await sendHeartbeat();
-        diagnostics.steps.push('Initial heartbeat sent');
-      } catch (e) {
-        diagnostics.steps.push('Initial heartbeat error: ' + e.message);
-      }
-      try {
-        await logEvent('LOGIN', {});
-        diagnostics.steps.push('Login event logged');
-      } catch (e) {}
-    }
+      chrome.windows.onRemoved.addListener(windowCloseListener);
 
-    diagnostics.steps.push('Complete - mode: ' + connectionMode);
-    console.log('Microsoft login successful:', userProfile?.email, 'Mode:', connectionMode);
-    
-    return { success: true, user: userProfile, mode: connectionMode, diagnostics };
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearInterval(checkInterval);
+          chrome.windows.onRemoved.removeListener(windowCloseListener);
+          diagnostics.errors.push('Login timeout');
+          resolve({ success: false, error: 'Login timed out', diagnostics });
+        }
+      }, 300000);
+    });
   } catch (error) {
     diagnostics.errors.push('Unexpected: ' + error.message);
     console.error('Microsoft login error:', error);
     return { success: false, error: error.message, diagnostics };
-  }
-}
-
-async function verifyMagicLink(magicLink) {
-  try {
-    const url = new URL(magicLink);
-    const tokenHash = url.searchParams.get('token_hash');
-    const type = url.searchParams.get('type') || 'magiclink';
-
-    const response = await fetch(SUPABASE_URL + '/auth/v1/verify?token=' + tokenHash + '&type=' + type, {
-      method: 'GET',
-      headers: { 'apikey': SUPABASE_ANON_KEY },
-      redirect: 'manual'
-    });
-
-    if (response.status === 303 || response.status === 302) {
-      const location = response.headers.get('location');
-      if (location) {
-        const redirectUrl = new URL(location);
-        const hashParams = new URLSearchParams(redirectUrl.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        
-        if (accessToken) {
-          const userResponse = await fetch(SUPABASE_URL + '/auth/v1/user', {
-            headers: { 'Authorization': 'Bearer ' + accessToken, 'apikey': SUPABASE_ANON_KEY }
-          });
-          if (userResponse.ok) {
-            return { access_token: accessToken, user: await userResponse.json() };
-          }
-        }
-      }
-    }
-    return { access_token: null, user: null };
-  } catch (error) {
-    console.error('Error verifying magic link:', error);
-    return { access_token: null, user: null };
   }
 }
 
@@ -619,7 +510,7 @@ async function logEvent(action, data) {
 }`;
 
 // Original content.js with brand auto-detection + backend brand support
-const contentJs = `// BizGuard Content Script v5.9.0 - Brand Auto-Detection + Backend Support
+const contentJs = `// BizGuard Content Script v6.0.0 - Brand Auto-Detection + Backend Support
 (function() {
   console.log('[BizGuard] Content script booting...');
 
@@ -1131,7 +1022,7 @@ refreshBrandsBtn.addEventListener('click',async()=>{const r=await chrome.runtime
 
 init();`;
 
-const readmeMd = `# BizGuard Extension v5.9.0
+const readmeMd = `# BizGuard Extension v6.0.0
 
 ## Installation
 1. Go to chrome://extensions (Chrome) or edge://extensions (Edge)
@@ -1142,9 +1033,13 @@ const readmeMd = `# BizGuard Extension v5.9.0
 ## Features
 - Real-time term detection with auto brand detection from UI
 - Works on HelpDesk, LiveChat, and Text.com
-- Microsoft/Azure AD sign-in
+- Microsoft/Azure AD sign-in via web redirect
 - Auto-sync with dashboard
 - Hardcoded fallback brand mapping + backend brand support
+
+## Azure AD Setup
+Add this redirect URI to your Azure app registration:
+https://bizguard.bizcuits.io/extension-auth?action=callback
 
 ## Supported Sites
 - https://app.helpdesk.com/*
@@ -1155,13 +1050,60 @@ const readmeMd = `# BizGuard Extension v5.9.0
 ## How It Works
 The extension automatically detects which brand you're working on by reading the Team label from the page UI. When you type terms from other brands, it shows a warning modal.`;
 
+const authListenerJs = `// BizGuard Auth Listener - Bridges web app auth to extension
+(function() {
+  console.log('[BizGuard Auth Listener] Running on:', window.location.href);
+  
+  // Check if this page has auth data to send to the extension
+  const checkForAuthData = () => {
+    const authDataStr = localStorage.getItem('bizguard_extension_auth');
+    if (authDataStr) {
+      console.log('[BizGuard Auth Listener] Found auth data in localStorage');
+      try {
+        const authData = JSON.parse(authDataStr);
+        
+        // Store in chrome.storage.local for background.js to pick up
+        chrome.storage.local.set({ pendingAuthData: authData }, () => {
+          console.log('[BizGuard Auth Listener] Auth data saved to extension storage');
+          // Clean up localStorage
+          localStorage.removeItem('bizguard_extension_auth');
+        });
+      } catch (e) {
+        console.error('[BizGuard Auth Listener] Error parsing auth data:', e);
+      }
+    }
+  };
+  
+  // Check immediately
+  checkForAuthData();
+  
+  // Also listen for storage events in case the auth happens after this script loads
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'bizguard_extension_auth' && e.newValue) {
+      console.log('[BizGuard Auth Listener] Storage event detected');
+      checkForAuthData();
+    }
+  });
+  
+  // Poll periodically for a short time in case of timing issues
+  let pollCount = 0;
+  const pollInterval = setInterval(() => {
+    checkForAuthData();
+    pollCount++;
+    if (pollCount >= 20) { // Stop after 10 seconds
+      clearInterval(pollInterval);
+    }
+  }, 500);
+})();
+`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Generating extension ZIP v5.9.0...');
+    console.log('Generating extension ZIP v6.0.0...');
     
     const zip = new JSZip();
     
@@ -1169,6 +1111,7 @@ serve(async (req) => {
     zip.addFile('background.js', backgroundJs);
     zip.addFile('content.js', contentJs);
     zip.addFile('content.css', contentCss);
+    zip.addFile('auth-listener.js', authListenerJs);
     zip.addFile('popup.html', popupHtml);
     zip.addFile('popup.css', popupCss);
     zip.addFile('popup.js', popupJs);
