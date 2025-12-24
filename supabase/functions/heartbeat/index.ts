@@ -6,12 +6,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper to mask user IDs for logging (show first 8 chars only)
+function maskUserId(id: string): string {
+  if (!id || id.length < 8) return '***';
+  return id.substring(0, 8) + '...';
+}
+
 serve(async (req) => {
   console.log("Heartbeat function called, method:", req.method);
   
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    console.log("Handling OPTIONS preflight");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -35,24 +40,24 @@ serve(async (req) => {
     
     // Verify the user's token
     const token = authHeader.replace("Bearer ", "");
-    console.log("Verifying token...");
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !user) {
-      console.error("Auth error:", authError);
+      console.error("Auth verification failed");
       return new Response(
         JSON.stringify({ error: "Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
-    console.log("User verified:", user.id);
+    console.log("User verified:", maskUserId(user.id));
 
     // Parse body for optional extension info
     let body: any = {};
     try {
       body = await req.json();
-      console.log("Heartbeat body:", JSON.stringify(body));
+      // Log only non-sensitive fields
+      console.log("Heartbeat received with browser:", body.browser || 'unknown', "version:", body.extension_version || 'unknown');
     } catch {
       console.log("No body provided");
     }
@@ -72,7 +77,8 @@ serve(async (req) => {
     if (browser_version) updateData.browser_version = browser_version;
     if (extension_version) updateData.extension_version = extension_version;
     
-    console.log("Updating profile with:", JSON.stringify(updateData));
+    // Log only field names being updated, not values
+    console.log("Updating profile fields:", Object.keys(updateData).join(", "));
 
     const { error: updateError } = await supabaseClient
       .from("profiles")
@@ -80,14 +86,14 @@ serve(async (req) => {
       .eq("id", user.id);
 
     if (updateError) {
-      console.error("Update error:", updateError);
+      console.error("Update error occurred");
       return new Response(
         JSON.stringify({ error: "Failed to update heartbeat" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Heartbeat SUCCESS for user ${user.id} - browser: ${browser}, version: ${extension_version}`);
+    console.log("Heartbeat SUCCESS for user", maskUserId(user.id));
 
     return new Response(
       JSON.stringify({ 
@@ -101,7 +107,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Heartbeat error:", error);
+    console.error("Heartbeat error occurred");
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

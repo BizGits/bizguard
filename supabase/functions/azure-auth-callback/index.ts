@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper to mask email for logging (show first 2 chars + domain)
+function maskEmail(email: string): string {
+  if (!email || !email.includes('@')) return '***@***';
+  const [local, domain] = email.split('@');
+  const maskedLocal = local.length > 2 ? local.substring(0, 2) + '***' : '***';
+  return `${maskedLocal}@${domain}`;
+}
+
+// Helper to mask user IDs for logging (show first 8 chars only)
+function maskUserId(id: string): string {
+  if (!id || id.length < 8) return '***';
+  return id.substring(0, 8) + '...';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -81,7 +95,7 @@ serve(async (req) => {
                         ALLOWED_PATHS.some(path => redirectUrl.pathname.includes(path));
       
       if (!isAllowedOrigin && !isAllowedPattern) {
-        console.error('Invalid redirect URI origin:', redirectUrl.origin);
+        console.error('Invalid redirect URI origin');
         return new Response(JSON.stringify({ error: 'Invalid redirect URI' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -90,7 +104,7 @@ serve(async (req) => {
       
       validatedBaseUrl = redirectUrl.origin;
     } catch (e) {
-      console.error('Invalid redirect URI format:', redirectUri);
+      console.error('Invalid redirect URI format');
       return new Response(JSON.stringify({ error: 'Invalid redirect URI format' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -133,7 +147,7 @@ serve(async (req) => {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      console.error('Token exchange failed:', errorData);
+      console.error('Token exchange failed');
       return new Response(JSON.stringify({ error: 'Token exchange failed', details: errorData }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -151,20 +165,19 @@ serve(async (req) => {
     });
 
     if (!userInfoResponse.ok) {
-      const errorText = await userInfoResponse.text();
-      console.error('Failed to get user info:', userInfoResponse.status, errorText);
-      return new Response(JSON.stringify({ error: 'Failed to get user info', details: errorText }), {
+      console.error('Failed to get user info from Graph API');
+      return new Response(JSON.stringify({ error: 'Failed to get user info' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const userInfo = await userInfoResponse.json();
-    console.log('User info retrieved:', userInfo.mail || userInfo.userPrincipalName);
-
     const email = userInfo.mail || userInfo.userPrincipalName;
     const displayName = userInfo.displayName || email;
     const msId = userInfo.id;
+    
+    console.log('User info retrieved:', maskEmail(email));
 
     // Create Supabase admin client
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
@@ -183,7 +196,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (inviteError) {
-        console.error('Error checking invitation:', inviteError);
+        console.error('Error checking invitation status');
         return new Response(JSON.stringify({ error: 'Failed to check invitation status' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -191,7 +204,7 @@ serve(async (req) => {
       }
 
       if (!invitation) {
-        console.log('User not invited:', email);
+        console.log('User not invited:', maskEmail(email));
         return new Response(JSON.stringify({ 
           error: 'not_invited',
           message: 'You have not been invited to access the dashboard. Please contact an administrator.'
@@ -201,7 +214,7 @@ serve(async (req) => {
         });
       }
 
-      console.log('User invitation found:', email);
+      console.log('User invitation verified');
 
       // Mark invitation as used later after user creation
       var invitationToMark = invitation;
@@ -213,7 +226,7 @@ serve(async (req) => {
     const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
     
     if (listError) {
-      console.error('Error listing users:', listError);
+      console.error('Error listing users');
       return new Response(JSON.stringify({ error: 'Failed to check existing users' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -226,7 +239,7 @@ serve(async (req) => {
     if (existingUser) {
       // User exists, use their ID
       userId = existingUser.id;
-      console.log('Existing user found:', userId);
+      console.log('Existing user found:', maskUserId(userId));
     } else {
       // Create new user
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -240,7 +253,7 @@ serve(async (req) => {
       });
 
       if (createError) {
-        console.error('Error creating user:', createError);
+        console.error('Error creating user');
         return new Response(JSON.stringify({ error: 'Failed to create user' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -248,7 +261,7 @@ serve(async (req) => {
       }
 
       userId = newUser.user.id;
-      console.log('New user created:', userId);
+      console.log('New user created:', maskUserId(userId));
     }
 
     // Mark invitation as used (if not already used) - only for web auth
@@ -257,7 +270,7 @@ serve(async (req) => {
         .from('invitations')
         .update({ used_at: new Date().toISOString() })
         .eq('email', email.toLowerCase());
-      console.log('Invitation marked as used for:', email);
+      console.log('Invitation marked as used');
     }
 
     // For extension auth, return access token directly using admin session creation
@@ -275,7 +288,7 @@ serve(async (req) => {
       });
 
       if (linkError) {
-        console.error('Error generating link for extension:', linkError);
+        console.error('Error generating link for extension');
         return new Response(JSON.stringify({ error: 'Failed to generate session' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -300,17 +313,17 @@ serve(async (req) => {
             
             if (!verifyError && verifyData?.session?.access_token) {
               accessToken = verifyData.session.access_token;
-              console.log('Direct access token obtained for extension user:', email);
+              console.log('Direct access token obtained for extension user');
             } else {
-              console.log('OTP verify failed:', verifyError?.message || 'No session returned');
+              console.log('OTP verify result: no session returned');
             }
           }
         } catch (e) {
-          console.error('Error extracting/verifying token:', e);
+          console.error('Error extracting/verifying token');
         }
       }
 
-      console.log('Extension Azure AD authentication successful for:', email, 'Has token:', !!accessToken);
+      console.log('Extension Azure AD authentication successful, has token:', !!accessToken);
 
       return new Response(JSON.stringify({ 
         success: true,
@@ -333,7 +346,7 @@ serve(async (req) => {
     // Generate a magic link / session for the user (web auth)
     // Use validated base URL to prevent open redirect
     const dashboardUrl = `${validatedBaseUrl}/dashboard`;
-    console.log('Generating magic link with redirect to:', dashboardUrl);
+    console.log('Generating magic link for web auth');
     
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
@@ -344,7 +357,7 @@ serve(async (req) => {
     });
 
     if (sessionError) {
-      console.error('Error generating session:', sessionError);
+      console.error('Error generating session');
       return new Response(JSON.stringify({ error: 'Failed to generate session' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -358,10 +371,10 @@ serve(async (req) => {
       .eq('id', userId);
 
     if (profileError) {
-      console.log('Profile update note:', profileError.message);
+      console.log('Profile update note: update may have been skipped');
     }
 
-    console.log('Azure AD authentication successful for:', email);
+    console.log('Azure AD authentication successful');
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -371,7 +384,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
-    console.error('Error in azure-auth-callback:', error);
+    console.error('Error in azure-auth-callback');
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,

@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper to mask user IDs for logging (show first 8 chars only)
+function maskUserId(id: string): string {
+  if (!id || id.length < 8) return '***';
+  return id.substring(0, 8) + '...';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -46,7 +52,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      console.log('Token validation failed:', userError?.message);
+      console.log('Token validation failed');
       return new Response(JSON.stringify({ 
         valid: false,
         error: userError?.message || 'Invalid token',
@@ -71,7 +77,7 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    console.log('Token validated for:', user.email);
+    console.log('Token validated for user:', maskUserId(user.id));
 
     return new Response(JSON.stringify({ 
       valid: true,
@@ -89,7 +95,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
-    console.error('Error in /me endpoint:', error);
+    console.error('Error in /me endpoint');
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ 
       valid: false,
